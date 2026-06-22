@@ -1,0 +1,18 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+WORKDIR /src
+
+COPY Backend_BDII.sln ./
+COPY Backend_BDII/Backend_BDII.csproj Backend_BDII/
+
+RUN dotnet restore Backend_BDII/Backend_BDII.csproj
+
+COPY . .
+
+EXPOSE 5293
+
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV ASPNETCORE_URLS=http://+:5293
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+
+CMD ["dotnet", "watch", "run", "--project", "Backend_BDII/Backend_BDII.csproj", "--urls", "http://0.0.0.0:5293"]

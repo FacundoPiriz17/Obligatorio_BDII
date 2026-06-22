@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bdii_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: obligatoriobd2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: America/Montevideo
+    ports:
+      - "5433:5432"
+    volumes:
+      - bdii_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d obligatoriobd2"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bdii_network
+
+  backend:
+    build:
+      context: ./Backend_BDII
+      dockerfile: Dockerfile.dev
+    container_name: bdii_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5293:5293"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5293
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+
+      ConnectionStrings__UnloggedConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_unlogged;Password=unlogged_pass
+      ConnectionStrings__GeneralConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_general;Password=general_pass
+      ConnectionStrings__FuncionarioConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_funcionario;Password=funcionario_pass
+      ConnectionStrings__AdminConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_admin;Password=admin_pass
+      ConnectionStrings__AppConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_app;Password=app_pass
+
+      Jwt__Issuer: Backend_BDII
+      Jwt__Audience: Backend_BDII_Client
+      Jwt__Key: CAMBIAR_ESTO_POR_UNA_CLAVE_LARGA_DE_32_CARACTERES_MINIMO
+      Jwt__ExpirationMinutes: "120"
+    volumes:
+      - ./Backend_BDII:/src
+      - backend_bin:/src/Backend_BDII/bin
+      - backend_obj:/src/Backend_BDII/obj
+      - nuget_cache:/root/.nuget/packages
+    networks:
+      - bdii_network
+
+  frontend:
+    build:
+      context: ./Frontend_BDII
+      dockerfile: Dockerfile.dev
+    container_name: bdii_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5714:5714"
+    environment:
+      VITE_PROXY_TARGET: http://backend:5293
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./Frontend_BDII:/app
+      - frontend_node_modules:/app/node_modules
+    networks:
+      - bdii_network
+
+volumes:
+  bdii_pgdata:
+  backend_bin:
+  backend_obj:
+  nuget_cache:
+  frontend_node_modules:
+
+networks:
+  bdii_network:
+    driver: bridge
