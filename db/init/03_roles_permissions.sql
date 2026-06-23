@@ -154,6 +154,8 @@ TO obligatorio_funcionario;
 
 GRANT USAGE ON SEQUENCE dispositivo_escaneo_id_dispositivo_escaneo_seq
 TO obligatorio_funcionario;
+
+GRANT UPDATE ON compra TO obligatorio_funcionario;
 -- ------------------------------------------------------------
 -- 6. Usuario General: compras, entradas y transferencias
 -- ------------------------------------------------------------
