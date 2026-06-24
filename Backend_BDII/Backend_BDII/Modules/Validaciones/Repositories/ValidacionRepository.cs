@@ -47,7 +47,7 @@ public sealed class ValidacionRepository : IValidacionRepository
 
         await using (var command = new NpgsqlCommand(insertSql, connection))
         {
-            command.Parameters.AddWithValue("id_entrada", idEntrada);
+            command.Parameters.AddWithValue("id_entrada", (object?)idEntrada ?? DBNull.Value);
             command.Parameters.AddWithValue("id_dispositivo", idDispositivo);
             command.Parameters.AddWithValue("estado", estado);
             command.Parameters.AddWithValue("codigo_escaneado", codigoEscaneado);

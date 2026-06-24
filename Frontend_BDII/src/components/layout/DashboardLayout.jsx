@@ -59,8 +59,14 @@ export default function DashboardLayout() {
 
   const accent = isAdmin ? "text-energy-500" : "text-warn-500";
 
+  const logoTarget = isAdmin
+  ? routePaths.admin
+  : isFuncionario
+    ? routePaths.scanner
+    : routePaths.home;
+
   const logo = (collapsible) => (
-    <Link to={routePaths.home} className="flex h-16 items-center gap-3 px-5">
+    <Link to={logoTarget} className="flex h-16 items-center gap-3 px-5">
       <UcuLogoIcon
         className="size-9 rounded-lg bg-white/10 p-1.5 ring-1 ring-white/15"
         aria-hidden

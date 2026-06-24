@@ -898,6 +898,76 @@ ALTER TABLE valida ENABLE TRIGGER trg_validar_escaneo;
 
 --Insertar aquí los datos de ejemplo en /Carga de entrada para validar.
 
+
+
+-- ------------------------------------------------------------
+-- 7.Y Entradas vencidas no utilizadas
+-- ------------------------------------------------------------
+-- Representan entradas pagas para partidos terminados que nunca fueron consumidas.
+-- En BD se conservan como 'activa'.
+-- El front las muestra como 'vencida' porque el partido está 'terminado'.
+-- No tienen QR precargado y no deben tener validación válida asociada.
+
+INSERT INTO compra (
+    id_compra,
+    fecha_hora,
+    monto_total,
+    porcentaje_comision,
+    email_usuario,
+    estado
+) OVERRIDING SYSTEM VALUE VALUES
+    (
+        14,
+        '2026-06-22 10:00:00',
+        410,
+        5,
+        'facundo.piriz@correo.ucu.edu.uy',
+        'paga'
+    );
+
+-- Partido 46: GHA vs ENG, terminado, estadio 11.
+-- Costo partido = 65.
+-- Sector C estadio 11 = 160 => entrada 225.
+-- Sector D estadio 11 = 100 => entrada 165.
+-- Subtotal = 390.
+-- Comisión 5% => ROUND(390 * 1.05) = 410.
+INSERT INTO entrada (
+    id_entrada,
+    fecha_hora,
+    estado,
+    codigo_qr,
+    costo_total,
+    id_compra,
+    id_partido,
+    nombre_sector,
+    id_estadio,
+    email_propietario_actual
+) OVERRIDING SYSTEM VALUE VALUES
+    (
+        20,
+        '2026-06-22 10:01:00',
+        'activa',
+        NULL,
+        225,
+        14,
+        46,
+        'C',
+        11,
+        'facundo.piriz@correo.ucu.edu.uy'
+    ),
+    (
+        21,
+        '2026-06-22 10:02:00',
+        'activa',
+        NULL,
+        165,
+        14,
+        46,
+        'D',
+        11,
+        'facundo.piriz@correo.ucu.edu.uy'
+    );
+
 -- ------------------------------------------------------------
 -- 7.6 Recalcular importes finales de compras
 -- ------------------------------------------------------------
