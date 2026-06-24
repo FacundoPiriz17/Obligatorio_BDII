@@ -46,7 +46,11 @@ public sealed class ValidacionesController : ControllerBase
         }
         catch (PostgresException ex) when (ex.SqlState == "23505")
         {
-            return this.BadRequestError("La entrada ya tiene una validacion valida registrada.");
+            return this.BadRequestError("La entrada ya tiene una validación válida registrada.");
+        }
+        catch (PostgresException ex) when (ex.SqlState == "P0001")
+        {
+            return this.BadRequestError(ex.MessageText);
         }
         catch (PostgresException ex)
         {
@@ -75,9 +79,13 @@ public sealed class ValidacionesController : ControllerBase
         {
             return this.BadRequestError(ex.Message);
         }
+        catch (PostgresException ex) when (ex.SqlState == "P0001")
+        {
+            return this.BadRequestError(ex.MessageText);
+        }
         catch (PostgresException ex)
         {
-            _logger.LogWarning(ex, "Error de PostgreSQL al registrar invalidacion.");
+            _logger.LogWarning(ex, "Error de PostgreSQL al registrar invalidación.");
             return this.BadRequestError(ex.MessageText, "database_error");
         }
     }
@@ -140,12 +148,14 @@ public sealed class ValidacionesController : ControllerBase
     }
 
     [HttpGet("{idValidacion:int}")]
-    public async Task<ActionResult<ValidacionResponse>> GetById(int idValidacion, CancellationToken cancellationToken)
+    public async Task<ActionResult<ValidacionResponse>> GetById(
+        int idValidacion,
+        CancellationToken cancellationToken)
     {
         var validacion = await _validacionService.GetByIdAsync(idValidacion, cancellationToken);
 
         if (validacion is null)
-            return this.NotFoundError("Validacion no encontrada.");
+            return this.NotFoundError("Validación no encontrada.");
 
         if (User.IsInRole("Funcionario"))
         {

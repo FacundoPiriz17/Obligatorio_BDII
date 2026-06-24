@@ -16,6 +16,7 @@ const ESTILOS = {
   // entrada
   activa: "bg-ok-100 text-ok-600",
   consumida: "bg-container-high text-ink-faint",
+  vencida: "bg-warn-100 text-warn-600",
 
   // transferencia
   aceptada: "bg-ok-100 text-ok-600",

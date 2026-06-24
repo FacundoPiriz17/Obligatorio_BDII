@@ -76,8 +76,9 @@ public sealed class EventoService : IEventoService
         var email = NormalizeEmail(emailAdmin);
         ValidarDatosEvento(request.EquipoLocal, request.EquipoVisitante, request.Costo, request.Fase, request.SectoresHabilitados);
 
-        if (request.Fecha < DateOnly.FromDateTime(DateTime.Today))
-            throw new InvalidOperationException("No se puede crear un partido en una fecha anterior a hoy.");
+        var fechaHoraPartido = request.Fecha.ToDateTime(request.Hora);
+        if (fechaHoraPartido < DateTime.Now)
+            throw new InvalidOperationException("No se puede crear un partido en una fecha y hora anterior a la actual.");
 
         var ctx = await _eventoRepository.GetContextoEventoAsync(
             email, request.IdEstadio, request.EquipoLocal, request.EquipoVisitante, cancellationToken);
@@ -103,7 +104,9 @@ public sealed class EventoService : IEventoService
     {
         ValidarDatosEvento(request.EquipoLocal, request.EquipoVisitante, request.Costo, request.Fase, request.SectoresHabilitados);
 
-        if (!EstadosValidos.Contains(request.Estado))
+        var estadoRequest = request.Estado.Trim().ToLowerInvariant();
+
+        if (!EstadosValidos.Contains(estadoRequest))
             throw new InvalidOperationException("El estado del partido no es valido.");
 
         if (request.MarcadorLocal < 0 || request.MarcadorVisitante < 0)
@@ -127,19 +130,40 @@ public sealed class EventoService : IEventoService
         if (actual.Estado == "terminado")
             throw new InvalidOperationException("Un partido terminado no se puede editar.");
 
+        if (actual.Estadio.IdEstadio != request.IdEstadio &&
+            await _eventoRepository.TieneEntradasEmitidasAsync(idPartido, cancellationToken))
+            throw new InvalidOperationException("No se puede cambiar el estadio de un partido que ya tiene entradas emitidas.");
+
+        if (!string.Equals(actual.Estado, estadoRequest, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("El estado del partido no se puede cambiar desde la edición general. Use la acción específica de iniciar o finalizar partido.");
+
+        if (actual.Estado == "no empezado")
+        {
+            var nuevaFechaHoraPartido = request.Fecha.ToDateTime(request.Hora);
+            if (nuevaFechaHoraPartido < DateTime.Now)
+                throw new InvalidOperationException("No se puede mover un partido no empezado a una fecha y hora anterior a la actual.");
+        }
+
         if (actual.Estado == "empezado")
         {
             var soloMarcador =
-                actual.Fecha == request.Fecha &&
-                actual.Hora == request.Hora &&
-                actual.Estadio.IdEstadio == request.IdEstadio &&
-                string.Equals(actual.EquipoLocal, request.EquipoLocal.Trim(), StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(actual.EquipoVisitante, request.EquipoVisitante.Trim(), StringComparison.OrdinalIgnoreCase) &&
-                actual.CostoBase == request.Costo &&
-                string.Equals(actual.Fase, request.Fase.Trim(), StringComparison.OrdinalIgnoreCase);
+                EsMismaConfiguracionEvento(actual, request) &&
+                string.Equals(actual.Estado, estadoRequest, StringComparison.OrdinalIgnoreCase);
 
             if (!soloMarcador)
                 throw new InvalidOperationException("Un partido en juego solo permite modificar el marcador.");
+
+            var eventoMarcador = await _eventoRepository.ActualizarMarcadorAsync(
+                       idPartido,
+                       email,
+                       request.MarcadorLocal,
+                       request.MarcadorVisitante,
+                       cancellationToken)
+                   ?? throw new KeyNotFoundException("Evento no encontrado.");
+
+            _auditService.Record("evento.marcador", email, new { eventoMarcador.IdPartido });
+
+            return eventoMarcador;
         }
 
         var evento = await _eventoRepository.ActualizarAsync(
@@ -172,6 +196,7 @@ public sealed class EventoService : IEventoService
 
         var paisAdmin = await _eventoRepository.GetPaisAdminAsync(email, cancellationToken);
         ValidarEventoPerteneceAJurisdiccion(actual.Estadio.Pais, paisAdmin);
+        ValidarTransicionEstado(actual, estado);
         
         var evento = await _eventoRepository.CambiarEstadoAsync(
                    idPartido,
@@ -189,6 +214,50 @@ public sealed class EventoService : IEventoService
         return evento;
     }
     
+    private static bool EsMismaConfiguracionEvento(EventoResponse actual, ActualizarEventoRequest request)
+    {
+        return actual.Fecha == request.Fecha &&
+               actual.Hora == request.Hora &&
+               actual.Estadio.IdEstadio == request.IdEstadio &&
+               string.Equals(actual.EquipoLocal, request.EquipoLocal.Trim(), StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(actual.EquipoVisitante, request.EquipoVisitante.Trim(), StringComparison.OrdinalIgnoreCase) &&
+               actual.CostoBase == request.Costo &&
+               string.Equals(actual.Fase, request.Fase.Trim(), StringComparison.OrdinalIgnoreCase) &&
+               actual.Sectores.Select(s => s.NombreSector).OrderBy(s => s).SequenceEqual(
+                   (request.SectoresHabilitados ?? [])
+                   .Select(s => s.Trim().ToUpperInvariant())
+                   .Distinct()
+                   .OrderBy(s => s),
+                   StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void ValidarTransicionEstado(EventoResponse actual, string nuevoEstado)
+    {
+        if (actual.Estado == "terminado")
+            throw new InvalidOperationException("Un partido terminado no puede cambiar de estado.");
+
+        if (string.Equals(actual.Estado, nuevoEstado, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (nuevoEstado == "no empezado")
+            throw new InvalidOperationException("No se puede volver un partido a no empezado.");
+
+        if (nuevoEstado == "empezado")
+        {
+            if (actual.Estado != "no empezado")
+                throw new InvalidOperationException("Solo se puede iniciar un partido que todavía no empezó.");
+
+            var fechaHoraPartido = actual.Fecha.ToDateTime(actual.Hora);
+            if (fechaHoraPartido > DateTime.Now)
+                throw new InvalidOperationException("No se puede iniciar un partido antes de su fecha y hora programadas.");
+
+            return;
+        }
+
+        if (nuevoEstado == "terminado" && actual.Estado != "empezado")
+            throw new InvalidOperationException("Solo se puede finalizar un partido que está empezado.");
+    }
+
     private static void ValidarContextoEvento(EventoCreacionContexto ctx, string fase)
     {
         if (string.IsNullOrWhiteSpace(ctx.PaisAdmin))

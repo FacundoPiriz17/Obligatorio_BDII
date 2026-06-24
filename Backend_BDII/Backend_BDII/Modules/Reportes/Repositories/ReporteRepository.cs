@@ -95,8 +95,8 @@ public sealed class ReporteRepository : IReporteRepository
                 p.equipo_visitante,
                 est.nombre_estadio,
                 est.pais::text AS pais_estadio,
-                (COUNT(e.id_entrada) FILTER (WHERE c.estado = 'paga'))::int AS entradas_vendidas,
-                COALESCE(SUM(e.costo_total) FILTER (WHERE c.estado = 'paga'), 0)::int AS monto_vendido
+                (COUNT(e.id_entrada) FILTER (WHERE c.estado = 'paga' AND e.estado <> 'cancelada'))::int AS entradas_vendidas,
+                COALESCE(SUM(e.costo_total) FILTER (WHERE c.estado = 'paga' AND e.estado <> 'cancelada'), 0)::int AS monto_vendido
             FROM partido p
             INNER JOIN estadio est ON est.id_estadio = p.id_estadio
             LEFT JOIN entrada e ON e.id_partido = p.id_partido
@@ -156,6 +156,7 @@ public sealed class ReporteRepository : IReporteRepository
             LEFT JOIN (
                 SELECT id_compra, COUNT(*)::int AS entradas
                 FROM entrada
+                WHERE estado <> 'cancelada'
                 GROUP BY id_compra
             ) ec ON ec.id_compra = c.id_compra
             WHERE c.estado = 'paga'
@@ -199,6 +200,7 @@ public sealed class ReporteRepository : IReporteRepository
                 FROM partido_sector ps
                 INNER JOIN sector s ON s.id_estadio = ps.id_estadio
                     AND s.nombre_sector = ps.nombre_sector
+                WHERE ps.habilitado = TRUE
                 GROUP BY ps.id_partido
             ),
             ventas_evento AS (
@@ -208,6 +210,7 @@ public sealed class ReporteRepository : IReporteRepository
                 FROM entrada e
                 INNER JOIN compra c ON c.id_compra = e.id_compra
                 WHERE c.estado = 'paga'
+                  AND e.estado <> 'cancelada'
                 GROUP BY e.id_partido
             )
             SELECT

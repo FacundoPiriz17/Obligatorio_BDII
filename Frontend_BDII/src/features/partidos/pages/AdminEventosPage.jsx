@@ -42,7 +42,15 @@ export default function AdminEventosPage() {
 
   const [cambiando, setCambiando] = useState(null);
 
+  const fechaHoraPartido = (p) => new Date(`${p.fecha}T${String(p.hora).slice(0, 8)}`);
+  const puedeIniciar = (p) => fechaHoraPartido(p) <= new Date();
+
   const cambiarEstado = async (p, nuevo) => {
+    if (nuevo === "empezado" && !puedeIniciar(p)) {
+      toast.error("No podés iniciar un partido antes de su fecha y hora programadas.");
+      return;
+    }
+
     setCambiando(p.idPartido);
     try {
       await partidoService.cambiarEstado(p.idPartido, nuevo);
@@ -87,8 +95,12 @@ export default function AdminEventosPage() {
                               size="sm"
                               variant="ghost"
                               loading={cambiando === p.idPartido}
-                              disabled={fueraJurisdiccion}
-                              title={fueraJurisdiccion ? "Este evento no pertenece a tu jurisdicción" : undefined}
+                              disabled={fueraJurisdiccion || !puedeIniciar(p)}
+                              title={fueraJurisdiccion
+                                  ? "Este evento no pertenece a tu jurisdicción"
+                                  : !puedeIniciar(p)
+                                      ? "No se puede iniciar antes de la fecha y hora programadas"
+                                      : undefined}
                               onClick={() => cambiarEstado(p, "empezado")}
                           >
                               <LuCirclePlay className="size-4" /> Iniciar

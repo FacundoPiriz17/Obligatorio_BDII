@@ -3,21 +3,47 @@ import { LuCircleCheck, LuCircleX, LuTicket, LuMapPin, LuIdCard } from "react-ic
 import { formatPartido } from "../../../lib/formatters";
 
 /**
- * Card de resultado que "inunda" la pantalla con el color del estado
- * verde VALIDADO / rojo INVÁLIDO.
- * Pensado para legibilidad
+ * Card de resultado que "inunda" la pantalla con el color del estado.
+ * Verde para validado/documento OK, rojo para inválido/error.
+ * Pensado para legibilidad.
  */
+export default function ResultadoValidacion({ validacion, verificacion, error }) {
+  if (error) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="overflow-hidden rounded-3xl bg-danger-600 text-white shadow-lg"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+          <span className="flex size-16 items-center justify-center rounded-full bg-white/15">
+            <LuCircleX className="size-10" />
+          </span>
 
-export default function ResultadoValidacion({ validacion, verificacion }) {
-  // `validacion` viene de escanear/invalidar; `verificacion` de manual/verificar
+          <p className="text-4xl font-extrabold tracking-tight display-tight">
+            {error.titulo || "ERROR"}
+          </p>
+
+          <p className="max-w-md text-sm font-semibold text-white/90">
+            {error.mensaje || "La operación no pudo completarse."}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // `validacion` viene de escanear/invalidar; `verificacion` de manual/verificar.
   const entrada = validacion?.entrada ?? verificacion?.entrada;
+
   const valida = validacion
     ? (validacion.estado || "").toLowerCase() === "válida"
     : verificacion?.documentoCoincide;
 
   const titulo = validacion
-    ? (valida ? "VALIDADO" : "INVÁLIDO")
-    : (valida ? "DOCUMENTO OK" : "NO COINCIDE");
+    ? valida ? "VALIDADO" : "INVÁLIDO"
+    : valida ? "DOCUMENTO OK" : "NO COINCIDE";
 
   return (
     <motion.div
@@ -31,20 +57,29 @@ export default function ResultadoValidacion({ validacion, verificacion }) {
         <span className="flex size-16 items-center justify-center rounded-full bg-white/15">
           {valida ? <LuCircleCheck className="size-10" /> : <LuCircleX className="size-10" />}
         </span>
-        <p className="text-4xl font-extrabold tracking-tight display-tight">{titulo}</p>
+
+        <p className="text-4xl font-extrabold tracking-tight display-tight">
+          {titulo}
+        </p>
+
         {entrada?.nombrePropietarioActual && (
-          <p className="text-lg font-bold uppercase">{entrada.nombrePropietarioActual}</p>
+          <p className="text-lg font-bold uppercase">
+            {entrada.nombrePropietarioActual}
+          </p>
         )}
+
         {entrada && (
           <div className="mt-1 space-y-1 text-sm font-semibold text-white/90">
             <p className="flex items-center justify-center gap-1.5">
               <LuTicket className="size-4" /> Entrada #{entrada.idEntrada} · Sector {entrada.nombreSector}
             </p>
+
             {entrada.partido && (
               <p className="flex items-center justify-center gap-1.5">
                 <LuMapPin className="size-4" /> {formatPartido(entrada.partido)}
               </p>
             )}
+
             {entrada.numeroDocumento != null && (
               <p className="flex items-center justify-center gap-1.5 text-white/80">
                 <LuIdCard className="size-4" /> {entrada.tipoDocumento} {entrada.numeroDocumento}

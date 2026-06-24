@@ -161,6 +161,25 @@ public sealed class EventoRepository : IEventoRepository
         return await command.ExecuteScalarAsync(cancellationToken) as string;
     }
 
+    public async Task<bool> TieneEntradasEmitidasAsync(int idPartido, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM entrada
+                WHERE id_partido = @id_partido
+            );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id_partido", idPartido);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is bool exists && exists;
+    }
+
     public async Task<EventoResponse> CrearAsync(
         string emailAdmin,
         CrearEventoRequest request,
@@ -242,6 +261,23 @@ public sealed class EventoRepository : IEventoRepository
 
         try
         {
+            var idEstadioActual = await GetIdEstadioPartidoAsync(connection, transaction, idPartido, cancellationToken);
+
+            if (idEstadioActual is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
+
+            var cambiaEstadio = idEstadioActual.Value != request.IdEstadio;
+            if (cambiaEstadio)
+            {
+                if (await TieneEntradasEmitidasUsingConnectionAsync(connection, transaction, idPartido, cancellationToken))
+                    throw new InvalidOperationException("No se puede cambiar el estadio de un partido que ya tiene entradas emitidas.");
+
+                await EliminarSectoresPartidoAsync(connection, transaction, idPartido, cancellationToken);
+            }
+
             const string updateSql = """
                                      UPDATE partido p
                                      SET
@@ -305,6 +341,42 @@ public sealed class EventoRepository : IEventoRepository
         }
     }
 
+    public async Task<EventoResponse?> ActualizarMarcadorAsync(
+        int idPartido,
+        string emailAdmin,
+        int marcadorLocal,
+        int marcadorVisitante,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            UPDATE partido p
+            SET marcador_local = @marcador_local,
+                marcador_visitante = @marcador_visitante,
+                email_admin = @email_admin
+            FROM admin a, estadio est_actual
+            WHERE p.id_partido = @id_partido
+              AND p.estado = 'empezado'
+              AND est_actual.id_estadio = p.id_estadio
+              AND LOWER(a.email_admin) = LOWER(@email_admin)
+              AND a.pais = est_actual.pais;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id_partido", idPartido);
+        command.Parameters.AddWithValue("email_admin", emailAdmin);
+        command.Parameters.AddWithValue("marcador_local", marcadorLocal);
+        command.Parameters.AddWithValue("marcador_visitante", marcadorVisitante);
+
+        var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+
+        if (affectedRows == 0)
+            return null;
+
+        return await GetByIdUsingConnectionAsync(connection, idPartido, null, cancellationToken);
+    }
+
     public async Task<EventoResponse?> CambiarEstadoAsync(
         int idPartido,
         string emailAdmin,
@@ -337,6 +409,64 @@ public sealed class EventoRepository : IEventoRepository
         return await GetByIdUsingConnectionAsync(connection, idPartido, null, cancellationToken);
     }
 
+
+    private static async Task<int?> GetIdEstadioPartidoAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idPartido,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT id_estadio
+            FROM partido
+            WHERE id_partido = @id_partido
+            FOR UPDATE;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_partido", idPartido);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is null ? null : Convert.ToInt32(result);
+    }
+
+    private static async Task<bool> TieneEntradasEmitidasUsingConnectionAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idPartido,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM entrada
+                WHERE id_partido = @id_partido
+            );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_partido", idPartido);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is bool exists && exists;
+    }
+
+    private static async Task EliminarSectoresPartidoAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idPartido,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE FROM partido_sector
+            WHERE id_partido = @id_partido;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_partido", idPartido);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task ReemplazarSectoresAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -344,27 +474,93 @@ public sealed class EventoRepository : IEventoRepository
         IEnumerable<string> sectores,
         CancellationToken cancellationToken)
     {
+        var sectoresNormalizados = sectores
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToArray();
+
+        if (sectoresNormalizados.Length == 0)
+            throw new InvalidOperationException("Debe habilitar al menos un sector para el evento.");
+
+        const string sectoresConEntradasSql = """
+            SELECT ps.nombre_sector::text
+            FROM partido_sector ps
+            WHERE ps.id_partido = @id_partido
+              AND NOT (ps.nombre_sector::text = ANY(@sectores))
+              AND EXISTS (
+                  SELECT 1
+                  FROM entrada e
+                  WHERE e.id_partido = ps.id_partido
+                    AND e.id_estadio = ps.id_estadio
+                    AND e.nombre_sector = ps.nombre_sector
+                    AND e.estado <> 'cancelada'
+              );
+            """;
+
+        var sectoresBloqueados = new List<string>();
+        await using (var command = new NpgsqlCommand(sectoresConEntradasSql, connection, transaction))
+        {
+            command.Parameters.AddWithValue("id_partido", idPartido);
+            command.Parameters.AddWithValue("sectores", sectoresNormalizados);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                sectoresBloqueados.Add(reader.GetString(0));
+            }
+        }
+
+        if (sectoresBloqueados.Count > 0)
+            throw new InvalidOperationException(
+                $"No se pueden cerrar sectores con entradas vendidas: {string.Join(", ", sectoresBloqueados)}.");
+
+        const string deshabilitarSql = """
+            UPDATE partido_sector ps
+            SET habilitado = FALSE
+            WHERE ps.id_partido = @id_partido
+              AND NOT (ps.nombre_sector::text = ANY(@sectores));
+            """;
+
+        await using (var command = new NpgsqlCommand(deshabilitarSql, connection, transaction))
+        {
+            command.Parameters.AddWithValue("id_partido", idPartido);
+            command.Parameters.AddWithValue("sectores", sectoresNormalizados);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         const string deleteSql = """
-            DELETE FROM partido_sector
-            WHERE id_partido = @id_partido;
+            DELETE FROM partido_sector ps
+            WHERE ps.id_partido = @id_partido
+              AND NOT (ps.nombre_sector::text = ANY(@sectores))
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM entrada e
+                  WHERE e.id_partido = ps.id_partido
+                    AND e.id_estadio = ps.id_estadio
+                    AND e.nombre_sector = ps.nombre_sector
+              );
             """;
 
         await using (var command = new NpgsqlCommand(deleteSql, connection, transaction))
         {
             command.Parameters.AddWithValue("id_partido", idPartido);
+            command.Parameters.AddWithValue("sectores", sectoresNormalizados);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         const string insertSql = """
-            INSERT INTO partido_sector (id_partido, nombre_sector, id_estadio)
-            SELECT p.id_partido, CAST(@nombre_sector AS sector_enum), p.id_estadio
+            INSERT INTO partido_sector (id_partido, nombre_sector, id_estadio, habilitado)
+            SELECT p.id_partido, CAST(@nombre_sector AS sector_enum), p.id_estadio, TRUE
             FROM partido p
             INNER JOIN sector s ON s.id_estadio = p.id_estadio
                 AND s.nombre_sector = CAST(@nombre_sector AS sector_enum)
-            WHERE p.id_partido = @id_partido;
+            WHERE p.id_partido = @id_partido
+            ON CONFLICT (id_partido, nombre_sector, id_estadio)
+            DO UPDATE SET habilitado = TRUE;
             """;
 
-        foreach (var sector in sectores.Select(s => s.Trim().ToUpperInvariant()).Distinct())
+        foreach (var sector in sectoresNormalizados)
         {
             await using var command = new NpgsqlCommand(insertSql, connection, transaction);
             command.Parameters.AddWithValue("id_partido", idPartido);
@@ -417,10 +613,12 @@ public sealed class EventoRepository : IEventoRepository
             ps.nombre_sector::text AS nombre_sector,
             COALESCE(s.capacidad, 0) AS capacidad_sector,
             COALESCE(s.costo, 0) AS costo_sector,
-            COUNT(e.id_entrada)::int AS entradas_vendidas
+            COUNT(e.id_entrada) FILTER (
+                WHERE e.estado <> 'cancelada'
+            )::int AS entradas_vendidas
         FROM partido p
         INNER JOIN estadio est ON est.id_estadio = p.id_estadio
-        LEFT JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio
+        LEFT JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio AND ps.habilitado = TRUE
         LEFT JOIN sector s ON s.id_estadio = ps.id_estadio AND s.nombre_sector = ps.nombre_sector
         LEFT JOIN entrada e ON e.id_partido = p.id_partido
             AND e.id_estadio = ps.id_estadio

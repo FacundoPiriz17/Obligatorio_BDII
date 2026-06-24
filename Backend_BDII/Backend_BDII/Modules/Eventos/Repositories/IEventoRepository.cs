@@ -30,7 +30,9 @@ public interface IEventoRepository
         string emailAdmin, int idEstadio, string equipoLocal, string equipoVisitante,
         CancellationToken cancellationToken = default);
     Task<string?> GetPaisAdminAsync(string emailAdmin, CancellationToken cancellationToken = default);
+    Task<bool> TieneEntradasEmitidasAsync(int idPartido, CancellationToken cancellationToken = default);
     Task<EventoResponse> CrearAsync(string emailAdmin, CrearEventoRequest request, CancellationToken cancellationToken = default);
     Task<EventoResponse?> ActualizarAsync(int idPartido, string emailAdmin, ActualizarEventoRequest request, CancellationToken cancellationToken = default);
+    Task<EventoResponse?> ActualizarMarcadorAsync(int idPartido, string emailAdmin, int marcadorLocal, int marcadorVisitante, CancellationToken cancellationToken = default);
     Task<EventoResponse?> CambiarEstadoAsync(int idPartido, string emailAdmin, string estado, CancellationToken cancellationToken = default);
 }

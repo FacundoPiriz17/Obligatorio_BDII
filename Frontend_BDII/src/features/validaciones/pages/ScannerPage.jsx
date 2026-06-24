@@ -16,9 +16,11 @@ import { dispositivoService } from "../../dispositivos/services/dispositivoServi
 import { useFetch } from "../../../hooks/useFetch";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
 
-// Código que mandamos al backend en la verificación manual cuando no hay
-// lectura de QR. A alinear con el backend si espera otro literal.
 const CODIGO_MANUAL = "VERIFICACION-MANUAL";
+
+function getErrorMessage(err, fallback) {
+  return err?.detail || err?.message || fallback;
+}
 
 /**
  * Centro de validación del funcionario:
@@ -28,6 +30,7 @@ const CODIGO_MANUAL = "VERIFICACION-MANUAL";
  */
 export default function ScannerPage() {
   useDocumentTitle("Scanner");
+
   const { data: dispositivos, loading } = useFetch(
     useCallback(() => dispositivoService.mios(), [])
   );
@@ -37,27 +40,44 @@ export default function ScannerPage() {
   const [resultado, setResultado] = useState(null);
   const [procesando, setProcesando] = useState(false);
 
-  // Form manual
   const [idEntradaManual, setIdEntradaManual] = useState("");
   const [documentoManual, setDocumentoManual] = useState("");
 
   const activos = (dispositivos ?? []).filter((d) => d.activo);
   const dispositivoElegido = idDispositivo || (activos[0]?.idDispositivoEscaneo ?? "");
 
+  const mostrarError = (titulo, mensaje) => {
+    setResultado({
+      error: {
+        titulo,
+        mensaje,
+      },
+    });
+
+    toast.error(mensaje);
+  };
+
   const escanear = async (codigo) => {
     if (!dispositivoElegido) {
-      toast.error("Elegí un dispositivo de escaneo activo.");
+      mostrarError("NO VALIDADO", "Elegí un dispositivo de escaneo activo.");
       return;
     }
+
     if (procesando) return;
+
     setProcesando(true);
+
     try {
       const validacion = await validacionService.escanear(Number(dispositivoElegido), codigo);
       setResultado({ validacion });
+
       const ok = (validacion.estado || "").toLowerCase() === "válida";
       ok ? toast.success("Entrada validada") : toast.error("Entrada inválida");
     } catch (err) {
-      toast.error(err.detail || "No se pudo procesar el escaneo.");
+      mostrarError(
+        "NO VALIDADO",
+        getErrorMessage(err, "No se pudo procesar el escaneo.")
+      );
     } finally {
       setProcesando(false);
     }
@@ -65,37 +85,62 @@ export default function ScannerPage() {
 
   const verificarManual = async (e) => {
     e.preventDefault();
+
     if (!idEntradaManual || !documentoManual) {
-      toast.error("Completá entrada y documento.");
+      mostrarError("ERROR DE VERIFICACIÓN", "Completá entrada y documento.");
       return;
     }
+
     setProcesando(true);
+
     try {
-      const verificacion = await validacionService.verificarManual(idEntradaManual, documentoManual);
+      const verificacion = await validacionService.verificarManual(
+        idEntradaManual,
+        documentoManual
+      );
+
       setResultado({ verificacion });
+
       verificacion.documentoCoincide
         ? toast.success("El documento coincide con la entrada")
         : toast.error("El documento NO coincide");
     } catch (err) {
-      toast.error(err.detail || "No se pudo verificar la entrada.");
+      mostrarError(
+        "ERROR DE VERIFICACIÓN",
+        getErrorMessage(err, "No se pudo verificar la entrada.")
+      );
     } finally {
       setProcesando(false);
     }
   };
 
   const invalidarManual = async () => {
-    if (!dispositivoElegido || !idEntradaManual) return;
+    if (!dispositivoElegido) {
+      mostrarError("NO REGISTRADO", "Elegí un dispositivo de escaneo activo.");
+      return;
+    }
+
+    if (!idEntradaManual) {
+      mostrarError("NO REGISTRADO", "Ingresá el ID de la entrada a invalidar.");
+      return;
+    }
+
     setProcesando(true);
+
     try {
       const validacion = await validacionService.invalidar(
         Number(dispositivoElegido),
         idEntradaManual,
         CODIGO_MANUAL
       );
+
       setResultado({ validacion });
       toast.success("Invalidación registrada");
     } catch (err) {
-      toast.error(err.detail || "No se pudo registrar la invalidación.");
+      mostrarError(
+        "NO REGISTRADO",
+        getErrorMessage(err, "No se pudo registrar la invalidación.")
+      );
     } finally {
       setProcesando(false);
     }
@@ -105,7 +150,10 @@ export default function ScannerPage() {
 
   return (
     <>
-      <PageHeader title="Validación de entradas" subtitle="Escaneá el QR dinámico o verificá manualmente por documento." />
+      <PageHeader
+        title="Validación de entradas"
+        subtitle="Escaneá el QR dinámico o verificá manualmente por documento."
+      />
 
       {activos.length === 0 ? (
         <EmptyState
@@ -131,6 +179,7 @@ export default function ScannerPage() {
                 />
               }
             />
+
             <CardBody className="space-y-5">
               <Tabs
                 value={tab}
@@ -147,22 +196,44 @@ export default function ScannerPage() {
               ) : (
                 <form onSubmit={verificarManual} className="space-y-4">
                   <Input
-                    label="ID de entrada" type="number" inputMode="numeric" placeholder="Ej: 1042"
-                    value={idEntradaManual} onChange={(e) => setIdEntradaManual(e.target.value)}
+                    label="ID de entrada"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Ej: 1042"
+                    value={idEntradaManual}
+                    onChange={(e) => setIdEntradaManual(e.target.value)}
                   />
+
                   <Input
-                    label="Número de documento" type="number" inputMode="numeric" placeholder="Documento del portador"
-                    value={documentoManual} onChange={(e) => setDocumentoManual(e.target.value)}
+                    label="Número de documento"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Documento del portador"
+                    value={documentoManual}
+                    onChange={(e) => setDocumentoManual(e.target.value)}
                   />
+
                   <div className="flex gap-2">
-                    <Button type="submit" variant="primary" loading={procesando} className="flex-1">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      loading={procesando}
+                      className="flex-1"
+                    >
                       Verificar documento
                     </Button>
-                    <Button type="button" variant="danger" loading={procesando} onClick={invalidarManual}
-                      title="Registra una invalidación de la entrada en este dispositivo">
+
+                    <Button
+                      type="button"
+                      variant="danger"
+                      loading={procesando}
+                      onClick={invalidarManual}
+                      title="Registra una invalidación de la entrada en este dispositivo"
+                    >
                       <LuTriangleAlert className="size-4" /> Invalidar
                     </Button>
                   </div>
+
                   <p className="text-xs text-ink-faint">
                     “Verificar” compara el documento con el titular sin consumir la entrada.
                     “Invalidar” deja registro de un intento rechazado.
@@ -174,12 +245,20 @@ export default function ScannerPage() {
 
           <div className="lg:sticky lg:top-24">
             {resultado ? (
-              <ResultadoValidacion validacion={resultado.validacion} verificacion={resultado.verificacion} />
+              <ResultadoValidacion
+                validacion={resultado.validacion}
+                verificacion={resultado.verificacion}
+                error={resultado.error}
+              />
             ) : (
               <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-line bg-container-low/40 px-6 text-center">
                 <LuScanLine className="size-12 text-ink-faint" aria-hidden />
-                <p className="font-semibold text-ink-soft">El resultado de la validación aparecerá acá</p>
-                <p className="text-sm text-ink-faint">Verde si la entrada es válida, rojo si no.</p>
+                <p className="font-semibold text-ink-soft">
+                  El resultado de la validación aparecerá acá
+                </p>
+                <p className="text-sm text-ink-faint">
+                  Verde si la entrada es válida, rojo si no.
+                </p>
               </div>
             )}
           </div>

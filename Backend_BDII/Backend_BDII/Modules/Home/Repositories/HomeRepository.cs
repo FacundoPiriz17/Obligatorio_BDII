@@ -80,6 +80,7 @@ public sealed class HomeRepository : IHomeRepository
                 INNER JOIN entrada e ON e.id_partido = p.id_partido
                 INNER JOIN compra c ON c.id_compra = e.id_compra
                 WHERE c.estado = 'paga'
+                  AND e.estado <> 'cancelada'
             ),
             validaciones_admin AS (
                 SELECT v.id_validacion, v.estado, v.fecha_hora
@@ -300,7 +301,7 @@ public sealed class HomeRepository : IHomeRepository
                 p.equipo_local,
                 p.equipo_visitante,
                 est.nombre_estadio,
-                COUNT(e.id_entrada) FILTER (WHERE c.estado = 'paga')::int AS entradas_vendidas
+                COUNT(e.id_entrada) FILTER (WHERE c.estado = 'paga' AND e.estado <> 'cancelada')::int AS entradas_vendidas
             FROM admin a
             INNER JOIN estadio est ON est.pais = a.pais
             INNER JOIN partido p ON p.id_estadio = est.id_estadio

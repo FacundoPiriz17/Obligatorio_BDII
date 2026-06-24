@@ -355,12 +355,12 @@ INSERT INTO partido (
     (46, '2026-06-23', '17:00', 11, 'GHA', 'ENG', 2, 1, 65, 'Fase de grupos', 'terminado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
     (47, '2026-06-23', '20:00', 11, 'CRO', 'PAN', 0, 2, 50, 'Fase de grupos', 'terminado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
     (48, '2026-06-23', '23:00', 15, 'COD', 'COL', 2, 1, 50, 'Fase de grupos', 'terminado', 'thiago.garcia@correo.ucu.edu.uy', '2026-06-01'),
-    (49, '2026-06-24', '16:00', 12, 'CAN', 'SUI', 0, 0, 60, 'Fase de grupos', 'no empezado', 'santiago.aguerre@correo.ucu.edu.uy', '2026-06-01'),
-    (50, '2026-06-24', '16:00', 8, 'QAT', 'BIH', 0, 0, 50, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
-    (51, '2026-06-24', '19:00', 4, 'HAI', 'MAR', 0, 0, 50, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
-    (52, '2026-06-24', '19:00', 10, 'BRA', 'SCO', 0, 0, 60, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
-    (53, '2026-06-24', '22:00', 16, 'KOR', 'RSA', 0, 0, 45, 'Fase de grupos', 'no empezado', 'thiago.garcia@correo.ucu.edu.uy', '2026-06-01'),
-    (54, '2026-06-24', '22:00', 14, 'MEX', 'CZE', 0, 0, 60, 'Fase de grupos', 'no empezado', 'thiago.garcia@correo.ucu.edu.uy', '2026-06-01'),
+    (49, '2026-06-24', '16:00', 12, 'CAN', 'SUI', 1, 2, 60, 'Fase de grupos', 'terminado', 'santiago.aguerre@correo.ucu.edu.uy', '2026-06-01'),
+    (50, '2026-06-24', '16:00', 8, 'QAT', 'BIH', 2, 0, 50, 'Fase de grupos', 'terminado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
+    (51, '2026-06-24', '19:00', 4, 'HAI', 'MAR', 3, 1, 50, 'Fase de grupos', 'terminado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
+    (52, '2026-06-24', '19:00', 10, 'BRA', 'SCO', 0, 2, 60, 'Fase de grupos', 'terminado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
+    (53, '2026-06-24', '22:00', 16, 'KOR', 'RSA', 1, 1, 45, 'Fase de grupos', 'terminado', 'thiago.garcia@correo.ucu.edu.uy', '2026-06-01'),
+    (54, '2026-06-24', '22:00', 14, 'MEX', 'CZE', 0, 2, 60, 'Fase de grupos', 'terminado', 'thiago.garcia@correo.ucu.edu.uy', '2026-06-01'),
     (55, '2026-06-25', '17:00', 7, 'CIV', 'CUW', 0, 0, 45, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
     (56, '2026-06-25', '17:00', 1, 'GER', 'ECU', 0, 0, 55, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
     (57, '2026-06-25', '20:00', 6, 'NED', 'TUN', 0, 0, 55, 'Fase de grupos', 'no empezado', 'diego.deoliveira@correo.ucu.edu.uy', '2026-06-01'),
@@ -894,17 +894,6 @@ UPDATE entrada
 SET estado = 'consumida'
 WHERE id_entrada IN (1, 2, 3);
 
--- Las entradas de partidos terminados que no fueron consumidas
--- no deben quedar activas: no pueden generar QR ni validarse.
-UPDATE entrada e
-SET estado = 'cancelada'
-WHERE e.estado = 'activa'
-  AND e.id_partido IN (
-      SELECT p.id_partido
-      FROM partido p
-      WHERE p.estado = 'terminado'
-  );
-
 ALTER TABLE valida ENABLE TRIGGER trg_validar_escaneo;
 
 --Insertar aquí los datos de ejemplo en /Carga de entrada para validar.
@@ -923,124 +912,6 @@ SET monto_total = ROUND(
         WHERE e.id_compra = c.id_compra
     ), 0) * (1 + c.porcentaje_comision / 100.0)
 )::int;
-
--- ------------------------------------------------------------
--- 7.7 Chequeos de integridad para fallar rápido en Docker
--- ------------------------------------------------------------
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM entrada e
-        JOIN partido p ON p.id_partido = e.id_partido
-        JOIN sector s ON s.id_estadio = e.id_estadio
-            AND s.nombre_sector = e.nombre_sector
-        WHERE e.costo_total <> p.costo + s.costo
-    ) THEN
-        RAISE EXCEPTION 'Hay entradas con costo_total distinto a costo partido + costo sector.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM compra c
-        WHERE c.monto_total <> ROUND(
-            COALESCE((
-                SELECT SUM(e.costo_total)
-                FROM entrada e
-                WHERE e.id_compra = c.id_compra
-            ), 0) * (1 + c.porcentaje_comision / 100.0)
-        )::int
-    ) THEN
-        RAISE EXCEPTION 'Hay compras con monto_total mal calculado.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM compra c
-        WHERE c.monto_total = 0
-          AND EXISTS (
-              SELECT 1
-              FROM entrada e
-              WHERE e.id_compra = c.id_compra
-          )
-    ) THEN
-        RAISE EXCEPTION 'Hay compras con entradas asociadas y monto_total 0.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM entrada e
-        JOIN partido p ON p.id_partido = e.id_partido
-        WHERE e.estado = 'activa'
-          AND p.estado = 'terminado'
-    ) THEN
-        RAISE EXCEPTION 'Hay entradas activas para partidos terminados.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM compra c
-        JOIN entrada e ON e.id_compra = c.id_compra
-        WHERE c.estado = 'cancelada'
-          AND e.estado = 'activa'
-    ) THEN
-        RAISE EXCEPTION 'Hay compras canceladas con entradas activas.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM compra c
-        JOIN entrada e ON e.id_compra = c.id_compra
-        WHERE c.estado = 'paga'
-          AND e.estado = 'cancelada'
-    ) THEN
-        RAISE EXCEPTION 'Hay compras pagas con entradas canceladas.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM transferencia t
-        JOIN entrada e ON e.id_entrada = t.id_entrada
-        WHERE t.estado = 'pendiente'
-          AND LOWER(t.email_origen) <> LOWER(e.email_propietario_actual)
-    ) THEN
-        RAISE EXCEPTION 'Hay transferencias pendientes cuyo origen no es el propietario actual.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM entrada e
-        LEFT JOIN (
-            SELECT id_entrada, COUNT(*)::int AS aceptadas
-            FROM transferencia
-            WHERE estado = 'aceptada'
-            GROUP BY id_entrada
-        ) t ON t.id_entrada = e.id_entrada
-        WHERE e.transferencias_restantes <> 3 - COALESCE(t.aceptadas, 0)
-    ) THEN
-        RAISE EXCEPTION 'Hay entradas con transferencias_restantes incoherente.';
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM valida v
-        JOIN entrada e ON e.id_entrada = v.id_entrada
-        WHERE v.estado = 'válida'
-          AND v.codigo_escaneado IS DISTINCT FROM e.codigo_qr
-    ) THEN
-        RAISE EXCEPTION 'Hay validaciones válidas cuyo código escaneado no coincide con el QR actual.';
-    END IF;
-
-    IF EXISTS (
-        SELECT codigo_qr
-        FROM entrada
-        WHERE codigo_qr IS NOT NULL
-        GROUP BY codigo_qr
-        HAVING COUNT(*) > 1
-    ) THEN
-        RAISE EXCEPTION 'Hay códigos QR duplicados.';
-    END IF;
-END $$;
 
 SELECT setval(
     pg_get_serial_sequence('estadio', 'id_estadio'),

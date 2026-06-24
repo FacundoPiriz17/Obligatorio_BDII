@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { LuTicket, LuSearch } from "react-icons/lu";
 import PageHeader from "../../../components/layout/PageHeader";
@@ -12,9 +12,9 @@ import EntradaCard from "../components/EntradaCard";
 import { entradaService } from "../services/entradaService";
 import { useFetch } from "../../../hooks/useFetch";
 import { useDebounce } from "../../../hooks/useDebounce";
-import { ESTADOS_ENTRADA } from "../../../lib/constants";
 import { routePaths } from "../../../routes/routePaths";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
+import { estadoVisualEntrada } from "../utils/estadoEntrada";
 
 /** Entradas del usuario (de las que es propietario actual). */
 export default function MisEntradasPage() {
@@ -23,16 +23,25 @@ export default function MisEntradasPage() {
   const [busqueda, setBusqueda] = useState("");
   const q = useDebounce(busqueda);
 
+  const estadoBackend = estado === "vencida" ? undefined : estado || undefined;
+
   const { data, loading, error, refetch } = useFetch(
     useCallback(
-      () => entradaService.misEntradas({ estado: estado || undefined, busqueda: q || undefined }),
-      [estado, q]
+      () => entradaService.misEntradas({ estado: estadoBackend, busqueda: q || undefined }),
+      [estadoBackend, q]
     )
   );
 
-  const entradas = [...(data ?? [])].sort((a, b) =>
-    `${a.partido?.fecha ?? ""}${a.partido?.hora ?? ""}`.localeCompare(`${b.partido?.fecha ?? ""}${b.partido?.hora ?? ""}`)
-  );
+  const entradas = useMemo(() => {
+    const lista = [...(data ?? [])];
+    const filtradas = estado
+      ? lista.filter((e) => estadoVisualEntrada(e) === estado)
+      : lista;
+
+    return filtradas.sort((a, b) =>
+      `${a.partido?.fecha ?? ""}${a.partido?.hora ?? ""}`.localeCompare(`${b.partido?.fecha ?? ""}${b.partido?.hora ?? ""}`)
+    );
+  }, [data, estado]);
 
   return (
     <>
@@ -46,6 +55,7 @@ export default function MisEntradasPage() {
           value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
         <Select label="Estado" placeholder="Todas" options={[
           { value: "activa", label: "Activas" },
+          { value: "vencida", label: "Vencidas" },
           { value: "consumida", label: "Consumidas" },
         ]}
           value={estado} onChange={(e) => setEstado(e.target.value)} />

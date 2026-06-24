@@ -21,6 +21,7 @@ import { MAX_TRANSFERENCIAS } from "../../../lib/constants";
 import { routePaths } from "../../../routes/routePaths";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
 import { cn } from "../../../lib/cn";
+import { estadoVisualEntrada, entradaEstaVencida, entradaPermiteQr, entradaPermiteTransferencia } from "../utils/estadoEntrada";
 
 const ICONO_EVENTO = {
   compra: LuTicketCheck,
@@ -54,7 +55,10 @@ export default function EntradaDetallePage() {
   if (!entrada) return <Navigate to={routePaths.misEntradas} replace />;
 
   const esPropietario = entrada.emailPropietarioActual?.toLowerCase() === user?.email?.toLowerCase();
-  const puedeTransferir = esPropietario && entrada.estado === "activa" && entrada.transferenciasRestantes > 0;
+  const estadoVisual = estadoVisualEntrada(entrada);
+  const estaVencida = entradaEstaVencida(entrada);
+  const puedeVerQr = entradaPermiteQr(entrada, esPropietario);
+  const puedeTransferir = entradaPermiteTransferencia(entrada, esPropietario);
   const p = entrada.partido;
 
   return (
@@ -79,8 +83,12 @@ export default function EntradaDetallePage() {
       <div className="grid items-start gap-6 lg:grid-cols-[5fr_7fr]">
 
         <div className="lg:sticky lg:top-24">
-          <EntradaQR idEntrada={entrada.idEntrada} activo={entrada.estado === "activa" && esPropietario} />
-          {!esPropietario && (
+          <EntradaQR idEntrada={entrada.idEntrada} activo={puedeVerQr} />
+          {estaVencida ? (
+            <p className="mt-3 rounded-xl bg-warn-100 p-3 text-xs font-semibold text-warn-600">
+              Esta entrada está vencida porque el partido ya terminó. Se conserva como activa en la base, pero ya no genera QR.
+            </p>
+          ) : !esPropietario && (
             <p className="mt-3 rounded-xl bg-warn-100 p-3 text-xs font-semibold text-warn-600">
               Esta entrada ya no está a tu nombre: el QR solo lo ve el propietario actual.
             </p>
@@ -89,7 +97,7 @@ export default function EntradaDetallePage() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Detalle" actions={<Badge estado={entrada.estado} />} />
+            <CardHeader title="Detalle" actions={<Badge estado={estadoVisual} />} />
             <CardBody>
               <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>

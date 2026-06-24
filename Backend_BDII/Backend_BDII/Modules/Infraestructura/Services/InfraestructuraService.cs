@@ -37,6 +37,7 @@ public sealed class InfraestructuraService : IInfraestructuraService
     {
         ValidarEstadio(request.Nombre, request.Capacidad, request.Pais);
         ValidarSectoresCreacion(request.Sectores);
+        ValidarCapacidadSectores(request.Capacidad, request.Sectores);
 
         return _infraestructuraRepository.CrearEstadioAsync(NormalizeEmail(emailAdmin), request, cancellationToken);
     }
@@ -177,6 +178,18 @@ public sealed class InfraestructuraService : IInfraestructuraService
             if (sector.Costo.HasValue && sector.Costo.Value < 0)
                 throw new InvalidOperationException("El costo del sector no puede ser negativo.");
         }
+    }
+
+    private static void ValidarCapacidadSectores(int? capacidadEstadio, IEnumerable<CrearSectorRequest> sectores)
+    {
+        if (!capacidadEstadio.HasValue)
+            return;
+
+        var sumaSectores = sectores.Sum(s => s.Capacidad ?? 0);
+
+        if (sumaSectores > capacidadEstadio.Value)
+            throw new InvalidOperationException(
+                $"La suma de capacidades de los sectores ({sumaSectores}) no puede superar la capacidad del estadio ({capacidadEstadio.Value}).");
     }
 
     private static void ValidarEmailFuncionario(string email)

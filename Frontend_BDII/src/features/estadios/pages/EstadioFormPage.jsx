@@ -81,6 +81,9 @@ export default function EstadioFormPage() {
     if (!form.ciudad.trim()) e.ciudad = "Indicá la ciudad.";
     const incluidos = form.sectores.filter((s) => s.incluido);
     if (incluidos.length === 0) e.sectores = "Incluí al menos un sector.";
+    if (capacidadTotal > 0 && sumaSectores > capacidadTotal) {
+      e.sectores = `La suma de sectores (${sumaSectores.toLocaleString("es-UY")}) no puede superar la capacidad total (${capacidadTotal.toLocaleString("es-UY")}).`;
+    }
     setErrores(e);
     return Object.keys(e).length === 0;
   };

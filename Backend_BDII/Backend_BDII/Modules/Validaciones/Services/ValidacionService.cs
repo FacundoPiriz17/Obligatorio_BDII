@@ -30,9 +30,14 @@ public sealed partial class ValidacionService : IValidacionService
         if (string.IsNullOrWhiteSpace(request.CodigoEscaneado))
             throw new InvalidOperationException("El codigo escaneado es obligatorio.");
 
-        var idEntrada = ExtraerIdEntrada(request.CodigoEscaneado);
-        var codigoQrActual = await _validacionRepository.GetCodigoQrActualAsync(idEntrada, cancellationToken);
-        var estado = string.Equals(codigoQrActual, request.CodigoEscaneado, StringComparison.Ordinal)
+        var idEntradaDetectada = TryExtraerIdEntrada(request.CodigoEscaneado);
+        var entradaExiste = idEntradaDetectada.HasValue &&
+            await _validacionRepository.EntradaExisteAsync(idEntradaDetectada.Value, cancellationToken);
+        var idEntradaRegistro = entradaExiste ? idEntradaDetectada : null;
+        var codigoQrActual = entradaExiste
+            ? await _validacionRepository.GetCodigoQrActualAsync(idEntradaDetectada!.Value, cancellationToken)
+            : null;
+        var estado = entradaExiste && string.Equals(codigoQrActual, request.CodigoEscaneado, StringComparison.Ordinal)
             ? EstadoValida
             : EstadoInvalida;
 
@@ -41,7 +46,7 @@ public sealed partial class ValidacionService : IValidacionService
         var validacion = await _validacionRepository.RegistrarAsync(
             email,
             request.IdDispositivo,
-            idEntrada,
+            idEntradaRegistro,
             request.CodigoEscaneado,
             estado,
             cancellationToken);
@@ -49,8 +54,8 @@ public sealed partial class ValidacionService : IValidacionService
         _auditService.Record("validacion.escanear_qr", email, new
         {
             request.IdDispositivo,
-            IdEntrada = idEntrada,
-            Estado = estado
+            IdEntrada = idEntradaRegistro,
+            Estado = validacion.Estado
         });
 
         return validacion;
@@ -127,12 +132,12 @@ public sealed partial class ValidacionService : IValidacionService
                ?? throw new KeyNotFoundException("Entrada no encontrada.");
     }
 
-    private static int ExtraerIdEntrada(string codigoEscaneado)
+    private static int? TryExtraerIdEntrada(string codigoEscaneado)
     {
         var match = QrEntradaRegex().Match(codigoEscaneado);
 
         if (!match.Success || !int.TryParse(match.Groups["id"].Value, out var idEntrada))
-            throw new InvalidOperationException("El QR no tiene un identificador de entrada valido.");
+            return null;
 
         return idEntrada;
     }

@@ -20,7 +20,7 @@ export const normalizarRol = (rol = "") => {
 };
 
 export const ESTADOS_COMPRA = ["pendiente", "confirmada", "paga", "cancelada"];
-export const ESTADOS_ENTRADA = ["activa", "consumida", "cancelada"];
+export const ESTADOS_ENTRADA = ["activa", "consumida", "cancelada", "vencida"];
 export const ESTADOS_TRANSFERENCIA = ["pendiente", "aceptada", "rechazada", "cancelada"];
 export const ESTADOS_PARTIDO = ["no empezado", "empezado", "terminado"];
 export const ESTADOS_VALIDACION = ["válida", "inválida"];

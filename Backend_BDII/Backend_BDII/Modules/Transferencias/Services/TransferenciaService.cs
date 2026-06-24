@@ -149,6 +149,10 @@ public sealed class TransferenciaService : ITransferenciaService
         if (rolUsuario == "origen" && !esOrigen)
             throw new UnauthorizedAccessException("Solo el origen puede cancelar la transferencia.");
 
+        if (nuevoEstado == "aceptada" &&
+            string.Equals(transferencia.Entrada.Partido.Estado, "terminado", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("No se puede aceptar la transferencia porque el partido ya terminó.");
+
         var transferenciaActualizada = await _transferenciaRepository.ActualizarEstadoAsync(
                    idTransferencia,
                    email,

@@ -286,16 +286,12 @@ public sealed class CompraRepository : ICompraRepository
                 )::int AS entradas_vendidas
             FROM partido p
             INNER JOIN estadio est ON est.id_estadio = p.id_estadio
-            INNER JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio
+            INNER JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio AND ps.habilitado = TRUE
             INNER JOIN sector s ON s.nombre_sector = ps.nombre_sector AND s.id_estadio = ps.id_estadio
             LEFT JOIN entrada e ON e.id_partido = p.id_partido
                 AND e.id_estadio = ps.id_estadio
                 AND e.nombre_sector = ps.nombre_sector
-            WHERE p.estado = 'no empezado'
-              AND (
-                    p.fecha > CURRENT_DATE
-                    OR (p.fecha = CURRENT_DATE AND p.hora > LOCALTIME)
-                  )
+            WHERE p.estado <> 'terminado'
             GROUP BY
                 p.id_partido,
                 p.fecha,
@@ -477,12 +473,14 @@ public sealed class CompraRepository : ICompraRepository
         const string sql = """
             UPDATE entrada e
             SET codigo_qr = @codigo_qr
-            FROM compra c
+            FROM compra c, partido p
             WHERE c.id_compra = e.id_compra
-              AND e.id_entrada = @id_entrada
-              AND LOWER(e.email_propietario_actual) = LOWER(@email_usuario)
-              AND e.estado = 'activa'
-              AND c.estado = 'paga'
+                AND p.id_partido = e.id_partido
+                AND e.id_entrada = @id_entrada
+                AND LOWER(e.email_propietario_actual) = LOWER(@email_usuario)
+                AND e.estado = 'activa'
+                AND c.estado = 'paga'
+                AND p.estado <> 'terminado'
             RETURNING e.codigo_qr;
             """;
 
@@ -505,14 +503,11 @@ public sealed class CompraRepository : ICompraRepository
         const string sql = """
             SELECT p.id_estadio
             FROM partido p
-            INNER JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio
+            INNER JOIN partido_sector ps ON ps.id_partido = p.id_partido AND ps.id_estadio = p.id_estadio AND ps.habilitado = TRUE
             WHERE p.id_partido = @id_partido
               AND ps.nombre_sector = CAST(@nombre_sector AS sector_enum)
-              AND p.estado = 'no empezado'
-              AND (
-                    p.fecha > CURRENT_DATE
-                    OR (p.fecha = CURRENT_DATE AND p.hora > LOCALTIME)
-                  );
+              AND ps.habilitado = TRUE
+              AND p.estado <> 'terminado';
             """;
 
         await using var command = new NpgsqlCommand(sql, connection, transaction);

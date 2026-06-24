@@ -31,7 +31,8 @@ export default function ValidacionesPage() {
     if (!q) return true;
     const k = q.toLowerCase();
     return (
-      String(v.idEntrada).includes(k) ||
+      String(v.idEntrada ?? "").includes(k) ||
+      v.codigoEscaneado?.toLowerCase().includes(k) ||
       v.entrada?.nombrePropietarioActual?.toLowerCase().includes(k) ||
       v.funcionario?.nombre?.toLowerCase().includes(k) ||
       formatPartido(v.entrada?.partido).toLowerCase().includes(k)
@@ -43,8 +44,8 @@ export default function ValidacionesPage() {
     { key: "fechaHora", header: "Fecha y hora", render: (v) => <span className="tabular-nums">{formatFechaHora(v.fechaHora)}</span> },
     { key: "entrada", header: "Entrada", render: (v) => (
       <div>
-        <p className="font-semibold">#{v.idEntrada} · {v.entrada?.nombrePropietarioActual ?? "—"}</p>
-        <p className="text-xs text-ink-faint">{formatPartido(v.entrada?.partido)} · Sector {v.entrada?.nombreSector}</p>
+        <p className="font-semibold">{v.idEntrada ? `#${v.idEntrada}` : "QR sin entrada asociada"} · {v.entrada?.nombrePropietarioActual ?? "—"}</p>
+        <p className="text-xs text-ink-faint">{v.entrada ? `${formatPartido(v.entrada?.partido)} · Sector ${v.entrada?.nombreSector}` : v.codigoEscaneado}</p>
       </div>
     )},
     { key: "funcionario", header: "Funcionario", render: (v) => (

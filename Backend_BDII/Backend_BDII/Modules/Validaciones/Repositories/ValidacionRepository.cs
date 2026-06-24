@@ -17,7 +17,7 @@ public sealed class ValidacionRepository : IValidacionRepository
     public async Task<ValidacionResponse> RegistrarAsync(
         string emailFuncionario,
         int idDispositivo,
-        int idEntrada,
+        int? idEntrada,
         string codigoEscaneado,
         string estado,
         CancellationToken cancellationToken = default)
@@ -70,10 +70,29 @@ public sealed class ValidacionRepository : IValidacionRepository
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("id_entrada", idEntrada);
+        command.Parameters.AddWithValue("id_entrada", (object?)idEntrada ?? DBNull.Value);
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is DBNull or null ? null : (string)result;
+    }
+
+    public async Task<bool> EntradaExisteAsync(int idEntrada, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _connectionFactory.OpenConnectionAsync(cancellationToken);
+
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM entrada
+                WHERE id_entrada = @id_entrada
+            );
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id_entrada", idEntrada);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is bool exists && exists;
     }
 
     public async Task<List<ValidacionResponse>> GetHistorialAsync(
@@ -150,7 +169,7 @@ public sealed class ValidacionRepository : IValidacionRepository
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("id_entrada", idEntrada);
+        command.Parameters.AddWithValue("id_entrada", (object?)idEntrada ?? DBNull.Value);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -246,10 +265,10 @@ public sealed class ValidacionRepository : IValidacionRepository
         INNER JOIN dispositivo_escaneo d ON d.id_dispositivo_escaneo = v.id_dispositivo
         INNER JOIN funcionario f ON f.email_funcionario = d.email_funcionario
         INNER JOIN usuario uf ON uf.email = f.email_funcionario
-        INNER JOIN entrada e ON e.id_entrada = v.id_entrada
-        INNER JOIN usuario up ON up.email = e.email_propietario_actual
-        INNER JOIN partido p ON p.id_partido = e.id_partido
-        INNER JOIN estadio est ON est.id_estadio = e.id_estadio
+        LEFT JOIN entrada e ON e.id_entrada = v.id_entrada
+        LEFT JOIN usuario up ON up.email = e.email_propietario_actual
+        LEFT JOIN partido p ON p.id_partido = e.id_partido
+        LEFT JOIN estadio est ON est.id_estadio = e.id_estadio
         """;
 
     private const string BaseEntradaSelectSql = """
@@ -286,7 +305,9 @@ public sealed class ValidacionRepository : IValidacionRepository
         return new ValidacionResponse
         {
             IdValidacion = reader.GetInt32(reader.GetOrdinal("id_validacion")),
-            IdEntrada = reader.GetInt32(reader.GetOrdinal("id_entrada_validacion")),
+            IdEntrada = reader.IsDBNull(reader.GetOrdinal("id_entrada_validacion"))
+                ? null
+                : reader.GetInt32(reader.GetOrdinal("id_entrada_validacion")),
             IdDispositivo = reader.GetInt32(reader.GetOrdinal("id_dispositivo")),
             Estado = reader.GetString(reader.GetOrdinal("estado_validacion")),
             CodigoEscaneado = reader.GetString(reader.GetOrdinal("codigo_escaneado")),
@@ -301,8 +322,11 @@ public sealed class ValidacionRepository : IValidacionRepository
         };
     }
 
-    private static EntradaValidacionResponse MapEntrada(NpgsqlDataReader reader)
+    private static EntradaValidacionResponse? MapEntrada(NpgsqlDataReader reader)
     {
+        if (reader.IsDBNull(reader.GetOrdinal("id_entrada")))
+            return null;
+
         return new EntradaValidacionResponse
         {
             IdEntrada = reader.GetInt32(reader.GetOrdinal("id_entrada")),

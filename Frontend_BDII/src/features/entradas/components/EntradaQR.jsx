@@ -19,7 +19,7 @@ export default function EntradaQR({ idEntrada, activo = true }) {
   const refrescandoRef = useRef(false);
 
   const regenerar = useCallback(async () => {
-    if (refrescandoRef.current) return;
+    if (!activo || refrescandoRef.current) return;
     refrescandoRef.current = true;
     try {
       const nuevo = await entradaService.generarQr(idEntrada);
@@ -31,15 +31,24 @@ export default function EntradaQR({ idEntrada, activo = true }) {
     } finally {
       refrescandoRef.current = false;
     }
-  }, [idEntrada]);
+  }, [activo, idEntrada]);
 
   // ref para no re-crear el interval cuando cambia segundosTotales
   const segundosTotalesRef = useRef(QR_REFRESH_SEGUNDOS);
   useEffect(() => { segundosTotalesRef.current = segundosTotales; }, [segundosTotales]);
 
-  // Carga inicial
+  // Carga inicial. Si no está activo, no pedimos vista/QR al backend.
   useEffect(() => {
     let alive = true;
+
+    if (!activo) {
+      setQr(null);
+      setError(null);
+      setCargando(false);
+      setRestante(segundosTotalesRef.current);
+      return () => { alive = false; };
+    }
+
     setCargando(true);
     entradaService
       .vista(idEntrada)
@@ -53,7 +62,7 @@ export default function EntradaQR({ idEntrada, activo = true }) {
       .catch((err) => alive && setError(err))
       .finally(() => alive && setCargando(false));
     return () => { alive = false; };
-  }, [idEntrada]);
+  }, [activo, idEntrada]);
 
   // Countdown + regeneración
   useEffect(() => {

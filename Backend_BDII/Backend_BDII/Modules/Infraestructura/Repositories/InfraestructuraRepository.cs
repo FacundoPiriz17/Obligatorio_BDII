@@ -101,6 +101,8 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            await ValidarCapacidadTotalSectoresAsync(connection, transaction, idEstadio, cancellationToken);
+
             var estadio = await GetEstadioByIdUsingConnectionAsync(connection, idEstadio, transaction, cancellationToken)
                           ?? throw new InvalidOperationException("El estadio fue creado, pero no se pudo recuperar.");
 
@@ -170,6 +172,8 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
                 return null;
             }
 
+            await ValidarCapacidadTotalSectoresAsync(connection, transaction, idEstadio, cancellationToken);
+
             var estadio = await GetEstadioByIdUsingConnectionAsync(connection, idEstadio, transaction, cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
@@ -204,6 +208,8 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
 
             await ValidarPaisAdminAsync(connection, transaction, emailAdmin, paisEstadio, cancellationToken);
 
+            var nombreSectorNormalizado = nombreSector.Trim().ToUpperInvariant();
+
             const string updateSql = """
                 UPDATE sector
                 SET capacidad = @capacidad,
@@ -215,7 +221,7 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
 
             await using var command = new NpgsqlCommand(updateSql, connection, transaction);
             command.Parameters.AddWithValue("id_estadio", idEstadio);
-            command.Parameters.AddWithValue("nombre_sector", nombreSector.Trim().ToUpperInvariant());
+            command.Parameters.AddWithValue("nombre_sector", nombreSectorNormalizado);
             command.Parameters.AddWithValue("capacidad", (object?)request.Capacidad ?? DBNull.Value);
             command.Parameters.AddWithValue("costo", (object?)request.Costo ?? DBNull.Value);
 
@@ -229,6 +235,17 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
 
             var sector = MapSector(reader);
             await reader.CloseAsync();
+
+            await ValidarCapacidadNoMenorQueEntradasVendidasAsync(
+                connection,
+                transaction,
+                idEstadio,
+                nombreSectorNormalizado,
+                sector.Capacidad,
+                cancellationToken);
+
+            await ValidarCapacidadTotalSectoresAsync(connection, transaction, idEstadio, cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
 
             return sector;
@@ -430,6 +447,82 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
 
         if (!string.Equals(paisAdmin, PaisSedeNormalizer.Normalize(paisEsperado), StringComparison.Ordinal))
             throw new InvalidOperationException("El administrador solo puede gestionar infraestructura de su pais sede.");
+    }
+
+    private static async Task ValidarCapacidadNoMenorQueEntradasVendidasAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idEstadio,
+        string nombreSector,
+        int? capacidadSector,
+        CancellationToken cancellationToken)
+    {
+        if (!capacidadSector.HasValue)
+            return;
+
+        const string sql = """
+            SELECT
+                e.id_partido,
+                COUNT(*)::int AS entradas_emitidas
+            FROM entrada e
+            WHERE e.id_estadio = @id_estadio
+              AND e.nombre_sector = CAST(@nombre_sector AS sector_enum)
+              AND e.estado <> 'cancelada'
+            GROUP BY e.id_partido
+            ORDER BY entradas_emitidas DESC, e.id_partido
+            LIMIT 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_estadio", idEstadio);
+        command.Parameters.AddWithValue("nombre_sector", nombreSector);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+            return;
+
+        var idPartido = reader.GetInt32(reader.GetOrdinal("id_partido"));
+        var entradasEmitidas = reader.GetInt32(reader.GetOrdinal("entradas_emitidas"));
+
+        if (capacidadSector.Value < entradasEmitidas)
+            throw new InvalidOperationException(
+                $"No se puede bajar la capacidad del sector {nombreSector} a {capacidadSector.Value}: el partido {idPartido} ya tiene {entradasEmitidas} entradas no canceladas en ese sector.");
+    }
+
+    private static async Task ValidarCapacidadTotalSectoresAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idEstadio,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                e.capacidad AS capacidad_estadio,
+                COALESCE(SUM(s.capacidad), 0)::int AS capacidad_sectores
+            FROM estadio e
+            LEFT JOIN sector s ON s.id_estadio = e.id_estadio
+            WHERE e.id_estadio = @id_estadio
+            GROUP BY e.id_estadio, e.capacidad;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_estadio", idEstadio);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+            throw new InvalidOperationException("No se pudo validar la capacidad del estadio.");
+
+        if (reader.IsDBNull(reader.GetOrdinal("capacidad_estadio")))
+            return;
+
+        var capacidadEstadio = reader.GetInt32(reader.GetOrdinal("capacidad_estadio"));
+        var capacidadSectores = reader.GetInt32(reader.GetOrdinal("capacidad_sectores"));
+
+        if (capacidadSectores > capacidadEstadio)
+            throw new InvalidOperationException(
+                $"La suma de capacidades de los sectores ({capacidadSectores}) no puede superar la capacidad del estadio ({capacidadEstadio}).");
     }
 
     private static async Task<string?> GetPaisEstadioAsync(

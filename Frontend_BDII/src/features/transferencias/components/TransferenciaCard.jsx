@@ -5,6 +5,7 @@ import Button from "../../../components/ui/Button";
 import { formatFechaHora, formatPartido } from "../../../lib/formatters";
 import { routePaths } from "../../../routes/routePaths";
 import { cn } from "../../../lib/cn";
+import { estadoVisualEntrada } from "../../entradas/utils/estadoEntrada";
 
 /**
  * Tarjeta de transferencia. `relacion` indica si el usuario es origen
@@ -13,6 +14,7 @@ import { cn } from "../../../lib/cn";
 export default function TransferenciaCard({ transferencia: t, relacion, onAccion, procesandoId }) {
   const esDestino = relacion === "recibidas";
   const p = t.entrada?.partido;
+  const estadoVisualEntradaTransferida = estadoVisualEntrada(t.entrada);
   const procesando = procesandoId === t.idTransferencia;
 
   return (
@@ -66,7 +68,7 @@ export default function TransferenciaCard({ transferencia: t, relacion, onAccion
         <div className="mt-3 border-t border-container-low pt-3">
           <Link to={routePaths.entradaDetalle(t.entrada.idEntrada)}>
             <Button size="sm" variant="energy" className="w-full">
-              <LuQrCode className="size-4" aria-hidden /> Ver entrada / QR
+              <LuQrCode className="size-4" aria-hidden /> {estadoVisualEntradaTransferida === "activa" ? "Ver entrada / QR" : "Ver detalle"}
             </Button>
           </Link>
         </div>

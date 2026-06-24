@@ -58,8 +58,9 @@ public sealed class UsuarioService : IUsuarioService
         ValidarUsuarioBase(request.Email, request.Nombre, request.Password, request.PaisDocumento, request.TipoDocumento, request.NumeroDocumento);
         ValidarRoles(request.Roles, request.PaisAdmin, request.NumeroLegajo);
 
-        if (NormalizeRoles(request.Roles).Count > 1)
-            throw new InvalidOperationException("Al crear un usuario solo se puede asignar un rol.");
+        var rolesCreacion = NormalizeRoles(request.Roles);
+        if (rolesCreacion.Count != 1)
+            throw new InvalidOperationException("El usuario debe tener exactamente un rol.");
 
         var normalizedRequest = new CrearUsuarioAdminRequest
         {
@@ -76,7 +77,7 @@ public sealed class UsuarioService : IUsuarioService
             NumeroDireccion = request.NumeroDireccion,
             CodigoPostalDireccion = request.CodigoPostalDireccion,
             Telefonos = NormalizeTelefonos(request.Telefonos),
-            Roles = NormalizeRoles(request.Roles),
+            Roles = rolesCreacion,
             PaisAdmin = request.PaisAdmin?.Trim(),
             NumeroLegajo = request.NumeroLegajo,
             EstadoVerificacion = request.EstadoVerificacion
@@ -208,9 +209,13 @@ public sealed class UsuarioService : IUsuarioService
 
         ValidarRoles(request.Roles, request.PaisAdmin, request.NumeroLegajo);
 
+        var rolesNormalizados = NormalizeRoles(request.Roles);
+        if (rolesNormalizados.Count != 1)
+            throw new InvalidOperationException("El usuario debe tener exactamente un rol.");
+
         var normalizedRequest = new ActualizarRolesUsuarioRequest
         {
-            Roles = NormalizeRoles(request.Roles),
+            Roles = rolesNormalizados,
             PaisAdmin = request.PaisAdmin?.Trim(),
             NumeroLegajo = request.NumeroLegajo,
             EstadoVerificacion = request.EstadoVerificacion

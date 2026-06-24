@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "UCU Mundial",
+    "slug": "FrontendMobile_BDII",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "ucumundial",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "predictiveBackGestureEnabled": false,
+      "package": "uy.edu.ucu.mundial",
+      "permissions": ["CAMERA"]
+    },
+    "ios": {
+      "bundleIdentifier": "uy.edu.ucu.mundial",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Necesitamos la cámara para escanear códigos QR de las entradas.",
+        "NSPhotoLibraryUsageDescription": "Para seleccionar un QR desde tu galería."
+      }
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-splash-screen", { "backgroundColor": "#00173a" }],
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Necesitamos la cámara para escanear códigos QR de las entradas." }]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

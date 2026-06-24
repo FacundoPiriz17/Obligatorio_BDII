@@ -237,6 +237,7 @@ CREATE TABLE partido_sector (
                                 id_partido INT,
                                 nombre_sector sector_enum,
                                 id_estadio INT,
+                                habilitado BOOLEAN NOT NULL DEFAULT TRUE,
 
                                 PRIMARY KEY (id_partido, nombre_sector, id_estadio),
                                 FOREIGN KEY (id_partido, id_estadio)
@@ -288,7 +289,7 @@ CREATE TABLE transferencia (
 
 CREATE TABLE valida (
                         id_validacion INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                        id_entrada INT NOT NULL,
+                        id_entrada INT,
                         id_dispositivo INT NOT NULL,
                         estado estado_validacion_enum NOT NULL,
                         codigo_escaneado VARCHAR(300) NOT NULL,
@@ -390,6 +391,74 @@ CREATE TRIGGER trg_validar_admin_pais_partido
     FOR EACH ROW
 EXECUTE FUNCTION fn_validar_admin_pais_partido();
 
+-- 1.B. Controlar transiciones de estado y que un partido no empezado no quede en el pasado.
+--      Se aplica solo sobre UPDATE para no interferir con datos demo cargados por seed.
+
+CREATE OR REPLACE FUNCTION fn_validar_actualizacion_estado_partido()
+    RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.estado = 'no empezado' AND (NEW.fecha + NEW.hora) < LOCALTIMESTAMP THEN
+        RAISE EXCEPTION
+            'No se puede dejar un partido no empezado en una fecha y hora anterior a la actual.';
+    END IF;
+
+    IF NEW.estado IS DISTINCT FROM OLD.estado THEN
+        IF OLD.estado = 'terminado' THEN
+            RAISE EXCEPTION 'Un partido terminado no puede cambiar de estado.';
+        END IF;
+
+        IF NEW.estado = 'no empezado' THEN
+            RAISE EXCEPTION 'No se puede volver un partido a no empezado.';
+        END IF;
+
+        IF NEW.estado = 'empezado' THEN
+            IF OLD.estado <> 'no empezado' THEN
+                RAISE EXCEPTION 'Solo se puede iniciar un partido que todavía no empezó.';
+            END IF;
+
+            IF (NEW.fecha + NEW.hora) > LOCALTIMESTAMP THEN
+                RAISE EXCEPTION 'No se puede iniciar un partido antes de su fecha y hora programadas.';
+            END IF;
+
+            RETURN NEW;
+        END IF;
+
+        IF NEW.estado = 'terminado' AND OLD.estado <> 'empezado' THEN
+            RAISE EXCEPTION 'Solo se puede finalizar un partido que está empezado.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_validar_actualizacion_estado_partido
+    BEFORE UPDATE OF fecha, hora, estado ON partido
+    FOR EACH ROW
+EXECUTE FUNCTION fn_validar_actualizacion_estado_partido();
+
+-- 1.C. Evitar mover de estadio partidos con entradas emitidas.
+
+CREATE OR REPLACE FUNCTION fn_bloquear_cambio_estadio_partido_con_entradas()
+    RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.id_estadio IS DISTINCT FROM OLD.id_estadio AND EXISTS (
+        SELECT 1
+        FROM entrada e
+        WHERE e.id_partido = OLD.id_partido
+    ) THEN
+        RAISE EXCEPTION 'No se puede cambiar el estadio de un partido que ya tiene entradas emitidas.';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_bloquear_cambio_estadio_partido_con_entradas
+    BEFORE UPDATE OF id_estadio ON partido
+    FOR EACH ROW
+EXECUTE FUNCTION fn_bloquear_cambio_estadio_partido_con_entradas();
+
 -- 2. Controlar que el administrador solo cree o edite estadios de su país sede.
 
 CREATE OR REPLACE FUNCTION fn_validar_admin_pais_estadio()
@@ -473,12 +542,26 @@ BEGIN
             NEW.id_compra;
     END IF;
 
+    IF NOT EXISTS (
+        SELECT 1
+        FROM partido_sector ps
+        WHERE ps.id_partido = NEW.id_partido
+          AND ps.nombre_sector = NEW.nombre_sector
+          AND ps.id_estadio = NEW.id_estadio
+          AND ps.habilitado = TRUE
+    ) THEN
+        RAISE EXCEPTION
+            'El sector % no está habilitado para el partido %.',
+            NEW.nombre_sector, NEW.id_partido;
+    END IF;
+
     SELECT COUNT(*)
     INTO v_entradas_emitidas_sector
     FROM entrada
     WHERE id_partido = NEW.id_partido
       AND nombre_sector = NEW.nombre_sector
       AND id_estadio = NEW.id_estadio
+      AND estado <> 'cancelada'
       AND (TG_OP = 'INSERT' OR id_entrada <> NEW.id_entrada);
 
     SELECT capacidad, costo
@@ -539,6 +622,45 @@ CREATE TRIGGER trg_preparar_entrada
 EXECUTE FUNCTION fn_preparar_entrada();
 
 
+-- 2.B Validar que la capacidad de un sector no baje por debajo
+--     de las entradas no canceladas ya emitidas para algún partido.
+
+CREATE OR REPLACE FUNCTION fn_validar_capacidad_sector_con_entradas()
+    RETURNS TRIGGER AS $$
+DECLARE
+    v_id_partido INT;
+    v_entradas_emitidas INT;
+BEGIN
+    IF NEW.capacidad IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT e.id_partido, COUNT(*)::int
+    INTO v_id_partido, v_entradas_emitidas
+    FROM entrada e
+    WHERE e.id_estadio = NEW.id_estadio
+      AND e.nombre_sector = NEW.nombre_sector
+      AND e.estado <> 'cancelada'
+    GROUP BY e.id_partido
+    ORDER BY COUNT(*) DESC, e.id_partido
+    LIMIT 1;
+
+    IF v_entradas_emitidas IS NOT NULL AND v_entradas_emitidas > NEW.capacidad THEN
+        RAISE EXCEPTION
+            'No se puede bajar la capacidad del sector % del estadio % a %. El partido % ya tiene % entradas no canceladas.',
+            NEW.nombre_sector, NEW.id_estadio, NEW.capacidad, v_id_partido, v_entradas_emitidas;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_validar_capacidad_sector_con_entradas
+    BEFORE UPDATE OF capacidad ON sector
+    FOR EACH ROW
+EXECUTE FUNCTION fn_validar_capacidad_sector_con_entradas();
+
+
 -- 3. Recalcular monto total de compra con comisión.
 
 CREATE OR REPLACE FUNCTION fn_recalcular_monto_compra(p_id_compra INT)
@@ -595,17 +717,19 @@ DECLARE
     v_propietario_actual VARCHAR(100);
     v_estado_entrada estado_entrada_enum;
     v_transferencias_restantes INT;
+    v_estado_partido estado_partido_enum;
 BEGIN
     IF TG_OP = 'UPDATE' AND OLD.estado = 'aceptada' THEN
         RAISE EXCEPTION
             'No se puede modificar una transferencia ya aceptada.';
     END IF;
 
-    SELECT email_propietario_actual, estado, transferencias_restantes
-    INTO v_propietario_actual, v_estado_entrada, v_transferencias_restantes
-    FROM entrada
-    WHERE id_entrada = NEW.id_entrada
-        FOR UPDATE;
+    SELECT e.email_propietario_actual, e.estado, e.transferencias_restantes, p.estado
+    INTO v_propietario_actual, v_estado_entrada, v_transferencias_restantes, v_estado_partido
+    FROM entrada e
+    INNER JOIN partido p ON p.id_partido = e.id_partido
+    WHERE e.id_entrada = NEW.id_entrada
+        FOR UPDATE OF e;
 
     IF v_propietario_actual IS NULL THEN
         RAISE EXCEPTION 'La entrada % no existe.', NEW.id_entrada;
@@ -614,6 +738,12 @@ BEGIN
     IF v_estado_entrada = 'consumida' THEN
         RAISE EXCEPTION
             'La entrada % ya fue consumida y no puede transferirse.',
+            NEW.id_entrada;
+    END IF;
+
+    IF v_estado_partido = 'terminado' AND (TG_OP = 'INSERT' OR NEW.estado = 'aceptada') THEN
+        RAISE EXCEPTION
+            'La entrada % pertenece a un partido terminado y no puede transferirse.',
             NEW.id_entrada;
     END IF;
 
@@ -681,22 +811,6 @@ DECLARE
     v_estado_partido estado_partido_enum;
     v_fecha_partido DATE;
 BEGIN
-    SELECT estado, codigo_qr, id_partido
-    INTO v_estado_entrada, v_codigo_qr, v_id_partido
-    FROM entrada
-    WHERE id_entrada = NEW.id_entrada
-    FOR UPDATE;
-
-    IF v_estado_entrada IS NULL THEN
-        RAISE EXCEPTION 'La entrada % no existe.', NEW.id_entrada;
-    END IF;
-
-    IF v_estado_entrada = 'consumida' THEN
-        RAISE EXCEPTION
-            'La entrada % ya fue consumida. No puede volver a validarse.',
-            NEW.id_entrada;
-    END IF;
-
     SELECT activo
     INTO v_dispositivo_activo
     FROM dispositivo_escaneo
@@ -714,47 +828,68 @@ BEGIN
             NEW.id_dispositivo;
     END IF;
 
-    IF NEW.estado = 'válida' THEN
-
-        SELECT estado, fecha
-        INTO v_estado_partido, v_fecha_partido
-        FROM partido
-        WHERE id_partido = v_id_partido;
-
-        IF v_estado_partido IS NULL THEN
-            RAISE EXCEPTION
-                'El partido asociado a la entrada % no existe.',
-                NEW.id_entrada;
-        END IF;
-
-        IF v_estado_partido = 'terminado' THEN
-            RAISE EXCEPTION
-                'No se puede validar la entrada %. El partido ya finalizó.',
-                NEW.id_entrada;
-        END IF;
-
-        IF v_fecha_partido < CURRENT_DATE THEN
-            RAISE EXCEPTION
-                'No se puede validar la entrada %. La fecha del partido ya pasó.',
-                NEW.id_entrada;
-        END IF;
-
-        IF v_estado_partido = 'no empezado' THEN
-            RAISE EXCEPTION
-                'No se puede validar la entrada %. El partido todavía no empezó.',
-                NEW.id_entrada;
-        END IF;
-
-        IF NEW.codigo_escaneado IS DISTINCT FROM v_codigo_qr THEN
-            RAISE EXCEPTION
-                'El código escaneado no coincide con el QR actual de la entrada %. La validación no puede marcarse como válida.',
-                NEW.id_entrada;
-        END IF;
-
-        UPDATE entrada
-        SET estado = 'consumida'
-        WHERE id_entrada = NEW.id_entrada;
+    IF NEW.id_entrada IS NULL THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
     END IF;
+
+    SELECT estado, codigo_qr, id_partido
+    INTO v_estado_entrada, v_codigo_qr, v_id_partido
+    FROM entrada
+    WHERE id_entrada = NEW.id_entrada
+    FOR UPDATE;
+
+    IF v_estado_entrada IS NULL THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    -- Los intentos ya marcados como inválidos deben quedar registrados.
+    -- Solo los intentos que pretenden marcarse como válidos consumen la entrada
+    -- y pasan por las validaciones estrictas.
+    IF NEW.estado <> 'válida' THEN
+        RETURN NEW;
+    END IF;
+
+    IF v_estado_entrada <> 'activa' THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    SELECT estado, fecha
+    INTO v_estado_partido, v_fecha_partido
+    FROM partido
+    WHERE id_partido = v_id_partido;
+
+    IF v_estado_partido IS NULL THEN
+        RAISE EXCEPTION
+            'El partido asociado a la entrada % no existe.',
+            NEW.id_entrada;
+    END IF;
+
+    IF v_estado_partido = 'terminado' THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    IF v_fecha_partido < CURRENT_DATE THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    IF v_estado_partido = 'no empezado' THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    IF NEW.codigo_escaneado IS DISTINCT FROM v_codigo_qr THEN
+        NEW.estado := 'inválida';
+        RETURN NEW;
+    END IF;
+
+    UPDATE entrada
+    SET estado = 'consumida'
+    WHERE id_entrada = NEW.id_entrada;
 
     RETURN NEW;
 END;

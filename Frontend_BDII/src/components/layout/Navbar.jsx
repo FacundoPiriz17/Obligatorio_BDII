@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   LuMenu, LuX, LuLogOut, LuUser, LuChevronDown,
-  LuCalendarDays, LuArrowLeftRight, LuShoppingBag, LuHouse, LuUsers,
+  LuCalendarDays, LuArrowLeftRight, LuShoppingBag, LuHouse, LuUsers, LuTicket
 } from "react-icons/lu";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { routePaths } from "../../routes/routePaths";
@@ -19,7 +19,7 @@ const linksComunes = [
 ];
 
 const linksGenerales = [
-  { to: routePaths.misEntradas, label: "Mis entradas", icon: UcuLogoIcon },
+  { to: routePaths.misEntradas, label: "Mis entradas", icon: LuTicket },
   { to: routePaths.misCompras, label: "Mis compras", icon: LuShoppingBag },
   { to: routePaths.transferencias, label: "Transferencias", icon: LuArrowLeftRight },
 ];

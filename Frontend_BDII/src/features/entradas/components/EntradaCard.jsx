@@ -6,10 +6,14 @@ import Flag from "../../../components/ui/Flag";
 import { formatFecha, formatHora } from "../../../lib/formatters";
 import { MAX_TRANSFERENCIAS } from "../../../lib/constants";
 import { routePaths } from "../../../routes/routePaths";
+import { estadoVisualEntrada, entradaPermiteTransferencia } from "../utils/estadoEntrada";
 
 /** Ticket */
 export default function EntradaCard({ entrada }) {
   const p = entrada.partido;
+  const estadoVisual = estadoVisualEntrada(entrada);
+  const puedeTransferir = entradaPermiteTransferencia(entrada);
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 10 }}
@@ -41,7 +45,7 @@ export default function EntradaCard({ entrada }) {
                 <span className="truncate">{p?.estadio?.nombre} · {p?.estadio?.ciudad}</span>
               </p>
             </div>
-            <Badge estado={entrada.estado} />
+            <Badge estado={estadoVisual} />
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-2 border-t border-container-low pt-3">
@@ -52,7 +56,7 @@ export default function EntradaCard({ entrada }) {
               </span>
             </span>
             <span className="flex items-center gap-3">
-              {entrada.estado === "activa" && entrada.transferenciasRestantes > 0 && (
+              {puedeTransferir && (
                 <Link
                   to={`${routePaths.transferenciaNueva}?entrada=${entrada.idEntrada}`}
                   className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft hover:text-navy-900"
@@ -64,7 +68,7 @@ export default function EntradaCard({ entrada }) {
                 to={routePaths.entradaDetalle(entrada.idEntrada)}
                 className="inline-flex items-center gap-1 text-xs font-bold text-navy-900 hover:underline"
               >
-                <LuQrCode className="size-3.5" /> {entrada.estado === "activa" ? "Ver QR" : "Detalle"}
+                <LuQrCode className="size-3.5" /> {estadoVisual === "activa" ? "Ver QR" : "Detalle"}
               </Link>
             </span>
           </div>

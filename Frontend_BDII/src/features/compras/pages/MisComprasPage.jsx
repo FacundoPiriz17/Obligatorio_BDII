@@ -18,6 +18,7 @@ import { formatFechaHora, formatMoney, formatPartido } from "../../../lib/format
 import { routePaths } from "../../../routes/routePaths";
 import { cn } from "../../../lib/cn";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
+import { estadoVisualEntrada } from "../../entradas/utils/estadoEntrada";
 
 /**
  * Historial de compras con la máquina de estados visible
@@ -131,20 +132,28 @@ export default function MisComprasPage() {
                       className="overflow-hidden border-t border-container-low bg-container-low/40"
                     >
                       <ul className="divide-y divide-container-low">
-                        {(c.entradas ?? []).map((e) => (
-                          <li key={e.idEntrada} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-                            <LuTicket className="size-4 text-navy-700" aria-hidden />
-                            <span className="font-bold">#{e.idEntrada}</span>
-                            <span className="text-ink-soft">{formatPartido(e.partido)} · Sector {e.nombreSector}</span>
-                            <Badge estado={e.estado} className="ml-auto" />
-                            <span className="font-semibold">{formatMoney(e.costoTotal)}</span>
-                            {c.estado === "paga" && e.estado === "activa" && (
-                              <Link to={routePaths.entradaDetalle(e.idEntrada)} className="text-xs font-bold text-navy-900 hover:underline">
-                                Ver QR
-                              </Link>
-                            )}
-                          </li>
-                        ))}
+                        {(c.entradas ?? []).map((e) => {
+                          const estadoVisual = estadoVisualEntrada(e);
+                          return (
+                            <li key={e.idEntrada} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+                              <LuTicket className="size-4 text-navy-700" aria-hidden />
+                              <span className="font-bold">#{e.idEntrada}</span>
+                              <span className="text-ink-soft">{formatPartido(e.partido)} · Sector {e.nombreSector}</span>
+                              <Badge estado={estadoVisual} className="ml-auto" />
+                              <span className="font-semibold">{formatMoney(e.costoTotal)}</span>
+                              {c.estado === "paga" && estadoVisual === "activa" && (
+                                <Link to={routePaths.entradaDetalle(e.idEntrada)} className="text-xs font-bold text-navy-900 hover:underline">
+                                  Ver QR
+                                </Link>
+                              )}
+                              {c.estado === "paga" && estadoVisual !== "activa" && (
+                                <Link to={routePaths.entradaDetalle(e.idEntrada)} className="text-xs font-bold text-navy-900 hover:underline">
+                                  Detalle
+                                </Link>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </motion.div>
                   )}

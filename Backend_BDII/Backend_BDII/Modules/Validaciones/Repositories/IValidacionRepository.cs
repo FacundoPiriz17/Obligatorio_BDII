@@ -7,12 +7,13 @@ public interface IValidacionRepository
     Task<ValidacionResponse> RegistrarAsync(
         string emailFuncionario,
         int idDispositivo,
-        int idEntrada,
+        int? idEntrada,
         string codigoEscaneado,
         string estado,
         CancellationToken cancellationToken = default);
 
     Task<string?> GetCodigoQrActualAsync(int idEntrada, CancellationToken cancellationToken = default);
+    Task<bool> EntradaExisteAsync(int idEntrada, CancellationToken cancellationToken = default);
 
     Task<List<ValidacionResponse>> GetHistorialAsync(
         string? emailFuncionario,

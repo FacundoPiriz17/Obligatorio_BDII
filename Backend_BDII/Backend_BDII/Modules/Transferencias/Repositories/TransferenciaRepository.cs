@@ -42,8 +42,7 @@ public sealed class TransferenciaRepository : ITransferenciaRepository
                   AND e.estado = 'activa'
                   AND e.transferencias_restantes > 0
                   AND c.estado = 'paga'
-                  AND p.estado = 'no empezado'
-                  AND (p.fecha > CURRENT_DATE OR (p.fecha = CURRENT_DATE AND p.hora > LOCALTIME))
+                  AND p.estado <> 'terminado'
             )
             RETURNING id_transferencia;
             """;
@@ -61,7 +60,7 @@ public sealed class TransferenciaRepository : ITransferenciaRepository
         }
 
         if (idTransferencia is null)
-            throw new InvalidOperationException("No se puede transferir: la entrada no existe, no está activa, no es tuya, no le quedan transferencias, su compra no está paga, o el partido ya empezó/terminó.");
+            throw new InvalidOperationException("No se puede transferir: la entrada no existe, no está activa, no es tuya, no le quedan transferencias, su compra no está paga, o el partido ya terminó.");
         
         return await GetByIdUsingConnectionAsync(connection, idTransferencia.Value, emailOrigen, cancellationToken)
                ?? throw new InvalidOperationException("La transferencia fue creada, pero no se pudo recuperar.");

@@ -91,6 +91,14 @@ export default function PartidoFormPage() {
     if (!form.idEstadio) e.idEstadio = "Elegí un estadio.";
     if (!form.fecha) e.fecha = "Indicá la fecha.";
     if (!form.hora) e.hora = "Indicá la hora.";
+    if ((!esEdicion || original?.estado === "no empezado") && form.fecha && form.hora) {
+      const fechaHora = new Date(`${form.fecha}T${form.hora.length === 5 ? `${form.hora}:00` : form.hora}`);
+      if (fechaHora < new Date()) {
+        e.hora = esEdicion
+          ? "No podés mover un partido no empezado a una fecha y hora anterior a la actual."
+          : "La fecha y hora del partido no pueden ser anteriores a la actual.";
+      }
+    }
     if (form.costo === "" || Number(form.costo) < 0) e.costo = "Costo base inválido.";
     if (!form.fechaHabilitacion) e.fechaHabilitacion = "Indicá la fecha de habilitación.";
     if (form.fechaHabilitacion && form.fecha) {
@@ -225,7 +233,14 @@ export default function PartidoFormPage() {
             <Card>
               <CardHeader title="Estado del partido" subtitle="Resultado y ciclo de vida del evento." />
               <CardBody className="grid gap-4 sm:grid-cols-3">
-                <Select label="Estado" options={ESTADOS_PARTIDO} value={form.estado} onChange={set("estado")} disabled={terminado} />
+                <Select
+                  label="Estado"
+                  options={ESTADOS_PARTIDO}
+                  value={form.estado}
+                  onChange={set("estado")}
+                  disabled={esEdicion}
+                  hint="El estado se cambia desde las acciones de la lista de eventos."
+                />
                 <Input label={`Goles ${form.equipoLocal || "local"}`} type="number" min="0"
                   value={form.marcadorLocal} onChange={set("marcadorLocal")} disabled={terminado} />
                 <Input label={`Goles ${form.equipoVisitante || "visitante"}`} type="number" min="0"

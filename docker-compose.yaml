@@ -36,6 +36,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5293
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      TZ: America/Montevideo
 
       ConnectionStrings__UnloggedConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_unlogged;Password=unlogged_pass
       ConnectionStrings__GeneralConnection: Host=db;Port=5432;Database=obligatoriobd2;Username=obligatorio_general;Password=general_pass

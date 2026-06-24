@@ -155,7 +155,10 @@ TO obligatorio_funcionario;
 GRANT USAGE ON SEQUENCE dispositivo_escaneo_id_dispositivo_escaneo_seq
 TO obligatorio_funcionario;
 
-GRANT UPDATE ON compra TO obligatorio_funcionario;
+-- Necesario porque fn_validar_escaneo() actualiza entrada.estado y eso dispara
+-- trg_recalcular_monto_compra, que recalcula compra.monto_total.
+-- Se limita a la columna usada por el trigger en vez de dar UPDATE total.
+GRANT UPDATE (monto_total) ON TABLE compra TO obligatorio_funcionario;
 -- ------------------------------------------------------------
 -- 6. Usuario General: compras, entradas y transferencias
 -- ------------------------------------------------------------
@@ -230,6 +233,7 @@ GRANT INSERT, UPDATE ON TABLE dispositivo_escaneo TO obligatorio_admin;
 
 GRANT INSERT, UPDATE ON TABLE partido TO obligatorio_admin;
 GRANT INSERT, DELETE ON TABLE partido_sector TO obligatorio_admin;
+GRANT UPDATE (habilitado) ON TABLE partido_sector TO obligatorio_admin;
 
 GRANT INSERT ON TABLE
     usuario,
@@ -258,5 +262,9 @@ GRANT USAGE ON SEQUENCE
     dispositivo_escaneo_id_dispositivo_escaneo_seq
 TO obligatorio_admin;
 
+GRANT EXECUTE ON FUNCTION fn_validar_capacidad_sector_con_entradas() TO obligatorio_admin;
+
 GRANT EXECUTE ON FUNCTION fn_validar_admin_pais_partido() TO obligatorio_admin;
+GRANT EXECUTE ON FUNCTION fn_validar_actualizacion_estado_partido() TO obligatorio_admin;
+GRANT EXECUTE ON FUNCTION fn_bloquear_cambio_estadio_partido_con_entradas() TO obligatorio_admin;
 GRANT EXECUTE ON FUNCTION fn_validar_admin_pais_estadio() TO obligatorio_admin;

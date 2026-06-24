@@ -20,6 +20,7 @@ import { MAX_TRANSFERENCIAS } from "../../../lib/constants";
 import { cn } from "../../../lib/cn";
 import { routePaths } from "../../../routes/routePaths";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
+import { entradaPermiteTransferencia } from "../../entradas/utils/estadoEntrada";
 
 export default function CrearTransferenciaPage() {
   useDocumentTitle("Nueva transferencia");
@@ -33,7 +34,7 @@ export default function CrearTransferenciaPage() {
   );
 
   const transferibles = useMemo(
-    () => (entradas ?? []).filter((e) => e.transferenciasRestantes > 0),
+    () => (entradas ?? []).filter((e) => entradaPermiteTransferencia(e)),
     [entradas]
   );
 

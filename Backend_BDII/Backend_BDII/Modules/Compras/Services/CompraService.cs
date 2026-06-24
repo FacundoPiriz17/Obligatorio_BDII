@@ -101,6 +101,8 @@ public sealed class CompraService : ICompraService
         if (compra.Estado != "pendiente")
             throw new InvalidOperationException("Solo se pueden confirmar compras pendientes.");
 
+        ValidarCompraSinPartidosTerminados(compra, "confirmar");
+
         var compraActualizada = await _compraRepository.ActualizarEstadoAsync(idCompra, email, "confirmada", cancellationToken)
                                ?? throw new KeyNotFoundException("Compra no encontrada.");
 
@@ -116,6 +118,8 @@ public sealed class CompraService : ICompraService
 
         if (compra.Estado is not ("pendiente" or "confirmada"))
             throw new InvalidOperationException("Solo se pueden pagar compras pendientes o confirmadas.");
+
+        ValidarCompraSinPartidosTerminados(compra, "pagar");
 
         var compraActualizada = await _compraRepository.ActualizarEstadoAsync(idCompra, email, "paga", cancellationToken)
                                ?? throw new KeyNotFoundException("Compra no encontrada.");
@@ -165,6 +169,16 @@ public sealed class CompraService : ICompraService
             QrPngBase64 = _qrCodeService.GeneratePngBase64(codigoQr),
             FechaHoraGeneracion = DateTime.UtcNow
         };
+    }
+
+    private static void ValidarCompraSinPartidosTerminados(CompraResponse compra, string accion)
+    {
+        var entradaTerminada = compra.Entradas.FirstOrDefault(e =>
+            string.Equals(e.Partido.Estado, "terminado", StringComparison.OrdinalIgnoreCase));
+
+        if (entradaTerminada is not null)
+            throw new InvalidOperationException(
+                $"No se puede {accion} la compra porque el partido {entradaTerminada.Partido.IdPartido} ya terminó.");
     }
 
     private async Task<CompraResponse> GetCompraExistenteAsync(

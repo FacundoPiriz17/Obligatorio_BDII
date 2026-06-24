@@ -32,6 +32,7 @@ using Backend_BDII.Common.Validators.Auth;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -187,6 +188,31 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exceptionFeature = context.Features.Get<IExceptionHandlerFeature>();
+        var exception = exceptionFeature?.Error;
+
+        Log.Error(exception, "Error inesperado no controlado.");
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var response = new ApiErrorResponse
+        {
+            Code = "internal_error",
+            Message = "Ocurrió un error inesperado en el servidor.",
+            Details = builder.Environment.IsDevelopment()
+                ? exception?.Message
+                : null
+        };
+
+        await context.Response.WriteAsJsonAsync(response);
+    });
+});
 
 app.UseSerilogRequestLogging();
 

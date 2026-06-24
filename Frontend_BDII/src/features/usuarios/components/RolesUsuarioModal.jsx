@@ -15,14 +15,13 @@ const TODOS = [ROLES.ADMIN, ROLES.FUNCIONARIO, ROLES.GENERAL];
  * subtipo: país (admin), legajo (funcionario), verificación (general).
  */
 export default function RolesUsuarioModal({ usuario, onClose, onSaved }) {
-  const [roles, setRoles] = useState((usuario.roles ?? []).map(normalizarRol));
+  const [roles, setRoles] = useState((usuario.roles ?? []).map(normalizarRol).slice(0, 1));
   const [paisAdmin, setPaisAdmin] = useState(usuario.paisAdmin ?? PAISES_SEDE[0]);
   const [numeroLegajo, setNumeroLegajo] = useState(usuario.numeroLegajo ?? "");
   const [estadoVerificacion, setEstadoVerificacion] = useState(usuario.estadoVerificacionGeneral ?? false);
   const [guardando, setGuardando] = useState(false);
 
-  const toggle = (r) =>
-    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  const elegirRol = (r) => setRoles([r]);
 
   const guardar = async () => {
     setGuardando(true);
@@ -60,7 +59,7 @@ export default function RolesUsuarioModal({ usuario, onClose, onSaved }) {
         {TODOS.map((r) => {
           const activo = roles.includes(r);
           return (
-            <button key={r} type="button" onClick={() => toggle(r)} aria-pressed={activo}
+            <button key={r} type="button" onClick={() => elegirRol(r)} aria-pressed={activo}
               className={cn(
                 "flex w-full items-center justify-between rounded-xl border-2 px-4 py-3 text-left font-bold transition-colors",
                 activo ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-white text-ink-soft hover:border-navy-700"
