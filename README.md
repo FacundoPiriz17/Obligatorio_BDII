@@ -77,7 +77,7 @@ También se debe recordar cambiar la hora del `INSERT` del partido de demo para 
 
 ## Ejecución con Docker
 
-Desde la carpeta raíz del proyecto, teniendo abierto el programa docker desktop, en la computadora ejecutar:
+Desde la carpeta raíz del proyecto, teniendo abierto el programa docker desktop, en la terminal ejecutar:
 
 ```bash
 docker compose up --build
