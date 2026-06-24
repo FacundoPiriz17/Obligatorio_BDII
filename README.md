@@ -133,16 +133,28 @@ Ejemplos de acceso por rol:
 
 ---
 
-## Reiniciar la base de datos
+## Base de datos
 
-Si se desea volver a ejecutar la inicialización de la base desde cero, por ejemplo luego de modificar los scripts SQL, se debe eliminar el volumen de Docker:
+La base de datos se inicializa desde la raíz del proyecto con los scripts ubicados en:
+
+```text
+db/init
+```
+
+Los scripts principales son:
+
+| Archivo | Función |
+|---|---|
+| `01_init_schema.sql` | Creación de tipos, tablas, constraints, índices, funciones y triggers. |
+| `02_seed_data.sql` | Carga de datos iniciales y datos de prueba. |
+| `03_roles_permissions.sql` | Creación de roles de conexión y permisos mínimos. |
+
+Si se modifican estos scripts y Docker ya tenía un volumen creado, se debe reiniciar la base desde cero:
 
 ```bash
 docker compose down -v
 docker compose up --build
 ```
-
-Esto borra los datos cargados previamente y vuelve a ejecutar los scripts de `db/init`.
 
 ---
 
