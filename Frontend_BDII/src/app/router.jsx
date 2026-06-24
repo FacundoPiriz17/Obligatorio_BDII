@@ -63,16 +63,15 @@ export default function AppRouter() {
         <Route path={routePaths.sesionExpirada} element={<SessionExpiredPage />} />
 
         <Route element={<ProtectedRoute />}>
-          {/* Navbar + footer. Rutas compartidas (cualquier rol autenticado) */}
-          <Route element={<AppLayout />}>
-            <Route path={routePaths.home} element={<HomePage />} />
-            <Route path={routePaths.partidos} element={<PartidosPage />} />
-            <Route path={routePaths.partidoDetalle()} element={<PartidoDetallePage />} />
-            <Route path={routePaths.equipos} element={<EquiposPage />} />
-            <Route path={routePaths.equipoDetalle()} element={<EquipoDetallePage />} />
+          {/* Exclusivo del usuario general */}
+          <Route element={<RoleRoute roles={[ROLES.GENERAL]} />}>
+            <Route element={<AppLayout />}>
+              <Route path={routePaths.home} element={<HomePage />} />
+              <Route path={routePaths.partidos} element={<PartidosPage />} />
+              <Route path={routePaths.partidoDetalle()} element={<PartidoDetallePage />} />
+              <Route path={routePaths.equipos} element={<EquiposPage />} />
+              <Route path={routePaths.equipoDetalle()} element={<EquipoDetallePage />} />
 
-            {/* Exclusivo del usuario general*/}
-            <Route element={<RoleRoute roles={[ROLES.GENERAL]} />}>
               <Route path={routePaths.comprar()} element={<ComprarEntradasPage />} />
               <Route path={routePaths.misCompras} element={<MisComprasPage />} />
               <Route path={routePaths.misEntradas} element={<MisEntradasPage />} />
@@ -82,36 +81,38 @@ export default function AppRouter() {
             </Route>
           </Route>
 
-          {/* Perfil: chrome según rol (navbar general o panel admin/funcionario) */}
+          {/* Perfil: compartido, pero con layout según rol */}
           <Route element={<PerfilLayout />}>
             <Route path={routePaths.perfil} element={<PerfilPage />} />
           </Route>
 
-          {/* Panel: sidebar (admin y funcionario) */}
-          <Route element={<DashboardLayout />}>
-            {/* Funcionario */}
-            <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO]} />}>
-              <Route path={routePaths.scanner} element={<ScannerPage />} />
-            </Route>
+          {/* Panel: solo admin o funcionario */}
+          <Route element={<RoleRoute roles={[ROLES.ADMIN, ROLES.FUNCIONARIO]} />}>
+            <Route element={<DashboardLayout />}>
+              {/* Funcionario */}
+              <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO]} />}>
+                <Route path={routePaths.scanner} element={<ScannerPage />} />
+              </Route>
 
-            {/* Validaciones: admin o funcionario */}
-            <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO, ROLES.ADMIN]} />}>
-              <Route path={routePaths.validaciones} element={<ValidacionesPage />} />
-              <Route path={routePaths.adminValidaciones} element={<ValidacionesPage />} />
-            </Route>
+              {/* Validaciones: admin o funcionario */}
+              <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO, ROLES.ADMIN]} />}>
+                <Route path={routePaths.validaciones} element={<ValidacionesPage />} />
+                <Route path={routePaths.adminValidaciones} element={<ValidacionesPage />} />
+              </Route>
 
-            {/* Admin */}
-            <Route element={<RoleRoute roles={[ROLES.ADMIN]} />}>
-              <Route path={routePaths.admin} element={<AdminDashboardPage />} />
-              <Route path={routePaths.adminEventos} element={<AdminEventosPage />} />
-              <Route path={routePaths.adminEventoNuevo} element={<PartidoFormPage />} />
-              <Route path={routePaths.adminEventoEditar()} element={<PartidoFormPage />} />
-              <Route path={routePaths.adminEstadios} element={<EstadiosPage />} />
-              <Route path={routePaths.adminEstadioNuevo} element={<EstadioFormPage />} />
-              <Route path={routePaths.adminEstadioEditar()} element={<EstadioFormPage />} />
-              <Route path={routePaths.adminUsuarios} element={<UsuariosAdminPage />} />
-              <Route path={routePaths.adminDispositivos} element={<DispositivosPage />} />
-              <Route path={routePaths.adminAuditoria} element={<AuditoriaPage />} />
+              {/* Admin */}
+              <Route element={<RoleRoute roles={[ROLES.ADMIN]} />}>
+                <Route path={routePaths.admin} element={<AdminDashboardPage />} />
+                <Route path={routePaths.adminEventos} element={<AdminEventosPage />} />
+                <Route path={routePaths.adminEventoNuevo} element={<PartidoFormPage />} />
+                <Route path={routePaths.adminEventoEditar()} element={<PartidoFormPage />} />
+                <Route path={routePaths.adminEstadios} element={<EstadiosPage />} />
+                <Route path={routePaths.adminEstadioNuevo} element={<EstadioFormPage />} />
+                <Route path={routePaths.adminEstadioEditar()} element={<EstadioFormPage />} />
+                <Route path={routePaths.adminUsuarios} element={<UsuariosAdminPage />} />
+                <Route path={routePaths.adminDispositivos} element={<DispositivosPage />} />
+                <Route path={routePaths.adminAuditoria} element={<AuditoriaPage />} />
+              </Route>
             </Route>
           </Route>
         </Route>

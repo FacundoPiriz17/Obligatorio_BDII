@@ -229,7 +229,10 @@ public sealed class ReporteRepository : IReporteRepository
             INNER JOIN estadio est ON est.id_estadio = p.id_estadio
             LEFT JOIN capacidad_evento cap ON cap.id_partido = p.id_partido
             LEFT JOIN ventas_evento ven ON ven.id_partido = p.id_partido
-            ORDER BY p.fecha, p.hora
+            ORDER BY
+                COALESCE(ven.entradas_vendidas, 0) DESC,
+                p.fecha,
+                p.hora
             LIMIT @limit;
             """;
 

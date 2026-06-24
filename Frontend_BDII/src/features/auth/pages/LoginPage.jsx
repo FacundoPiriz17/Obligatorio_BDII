@@ -34,17 +34,48 @@ export default function LoginPage() {
     al cambiar de cuenta.
   */
   const puedeAcceder = (path, roles) => {
-    if (!path || path.startsWith("/login") || path.startsWith("/no-autorizado")) return false;
-    const esGeneral = roles.includes(ROLES.GENERAL);
-    const esAdmin = roles.includes(ROLES.ADMIN);
-    const esFuncionario = roles.includes(ROLES.FUNCIONARIO);
-    if (path.startsWith("/admin")) return esAdmin;
-    if (path.startsWith("/scanner")) return esFuncionario;
-    if (path.startsWith("/validaciones")) return esAdmin || esFuncionario;
-    // Áreas exclusivas del usuario general
-    if (/^\/(mis-compras|mis-entradas|comprar|transferencias|entradas)/.test(path)) return esGeneral;
-    return true; // rutas compartidas: inicio, partidos, equipos, perfil
-  };
+  if (
+    !path ||
+    path.startsWith(routePaths.login) ||
+    path.startsWith(routePaths.noAutorizado) ||
+    path.startsWith(routePaths.sesionExpirada)
+  ) {
+    return false;
+  }
+
+  const esGeneral = roles.includes(ROLES.GENERAL);
+  const esAdmin = roles.includes(ROLES.ADMIN);
+  const esFuncionario = roles.includes(ROLES.FUNCIONARIO);
+
+  // Perfil es compartido para cualquier usuario autenticado
+  if (path === routePaths.perfil) return true;
+
+  if (path === routePaths.validaciones || path === routePaths.adminValidaciones) {
+    return esAdmin || esFuncionario;
+  }
+
+  // Funcionario
+  if (path === routePaths.scanner) return esFuncionario;
+
+  // Admin
+  if (path.startsWith("/admin")) return esAdmin;
+
+  // Usuario general
+  if (
+    path === routePaths.home ||
+    path.startsWith("/partidos") ||
+    path.startsWith("/equipos") ||
+    path.startsWith("/comprar") ||
+    path.startsWith("/mis-compras") ||
+    path.startsWith("/mis-entradas") ||
+    path.startsWith("/entradas") ||
+    path.startsWith("/transferencias")
+  ) {
+    return esGeneral;
+  }
+
+  return false;
+};
 
   const onSubmit = async (e) => {
     e.preventDefault();
