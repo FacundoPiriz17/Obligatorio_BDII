@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route } from "react-router-dom";
 import { routePaths } from "../routes/routePaths";
 import ProtectedRoute from "../routes/ProtectedRoute";
 import RoleRoute from "../routes/RoleRoute";
@@ -8,6 +7,8 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import PerfilLayout from "../components/layout/PerfilLayout";
 import { LoadingBlock } from "../components/ui/Spinner";
 import { ROLES } from "../lib/constants";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "../features/auth/hooks/useAuth";
 
 // Auth
 const LoginPage = lazy(() => import("../features/auth/pages/LoginPage"));
@@ -52,21 +53,33 @@ function Cargando() {
   );
 }
 
+function HomeGate() {
+  const { isAdmin, isFuncionario, isGeneral } = useAuth();
+
+  if (isAdmin) return <Navigate to={routePaths.admin} replace />;
+  if (isFuncionario && !isGeneral) return <Navigate to={routePaths.scanner} replace />;
+
+  return <AppLayout />;
+}
+
 export default function AppRouter() {
   return (
     <Suspense fallback={<Cargando />}>
       <Routes>
-
         <Route path={routePaths.login} element={<LoginPage />} />
         <Route path={routePaths.registro} element={<RegisterPage />} />
         <Route path={routePaths.noAutorizado} element={<UnauthorizedPage />} />
         <Route path={routePaths.sesionExpirada} element={<SessionExpiredPage />} />
 
         <Route element={<ProtectedRoute />}>
+          {/* Home compartido: redirige según rol */}
+          <Route element={<HomeGate />}>
+            <Route path={routePaths.home} element={<HomePage />} />
+          </Route>
+
           {/* Exclusivo del usuario general */}
           <Route element={<RoleRoute roles={[ROLES.GENERAL]} />}>
             <Route element={<AppLayout />}>
-              <Route path={routePaths.home} element={<HomePage />} />
               <Route path={routePaths.partidos} element={<PartidosPage />} />
               <Route path={routePaths.partidoDetalle()} element={<PartidoDetallePage />} />
               <Route path={routePaths.equipos} element={<EquiposPage />} />
@@ -94,10 +107,9 @@ export default function AppRouter() {
                 <Route path={routePaths.scanner} element={<ScannerPage />} />
               </Route>
 
-              {/* Validaciones: admin o funcionario */}
-              <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO, ROLES.ADMIN]} />}>
+              {/* Validaciones: funcionario */}
+              <Route element={<RoleRoute roles={[ROLES.FUNCIONARIO]} />}>
                 <Route path={routePaths.validaciones} element={<ValidacionesPage />} />
-                <Route path={routePaths.adminValidaciones} element={<ValidacionesPage />} />
               </Route>
 
               {/* Admin */}

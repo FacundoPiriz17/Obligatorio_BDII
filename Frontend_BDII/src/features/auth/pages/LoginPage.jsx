@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { LuMail, LuLockKeyhole, LuArrowRight } from "react-icons/lu";
 import AuthShell from "../components/AuthShell";
@@ -12,7 +12,7 @@ import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
 
 export default function LoginPage() {
   useDocumentTitle("Iniciar sesión");
-  const { login } = useAuth();
+  const { login, isAuthenticated, roles } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -50,8 +50,8 @@ export default function LoginPage() {
   // Perfil es compartido para cualquier usuario autenticado
   if (path === routePaths.perfil) return true;
 
-  if (path === routePaths.validaciones || path === routePaths.adminValidaciones) {
-    return esAdmin || esFuncionario;
+  if (path === routePaths.validaciones) {
+    return esFuncionario;
   }
 
   // Funcionario
@@ -81,11 +81,19 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
       const roles = await login(form.email.trim(), form.password);
       toast.success("Sesión iniciada");
-      const from = location.state?.from?.pathname;
-      const destino = puedeAcceder(from, roles) ? from : destinoPorRol(roles);
+      const fromLocation = location.state?.from;
+      const from = fromLocation
+        ? `${fromLocation.pathname}${fromLocation.search ?? ""}${fromLocation.hash ?? ""}`
+        : null;
+
+      const destino = puedeAcceder(from, rolesLogin)
+        ? from
+        : destinoPorRol(rolesLogin);
+
       navigate(destino, { replace: true });
     } catch (err) {
       setError(err.detail || "Email o contraseña incorrectos.");
@@ -93,6 +101,10 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (isAuthenticated) {
+    return <Navigate to={destinoPorRol(roles)} replace />;
+  }
 
   return (
     <AuthShell title="Accedé a tus entradas" subtitle="Ingresá con tu cuenta UCU para gestionar tus entradas del Mundial 2026.">

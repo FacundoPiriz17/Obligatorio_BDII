@@ -2,7 +2,6 @@
 -- ROLES / USUARIOS DE CONEXIÓN Y PERMISOS MÍNIMOS
 -- ============================================================
 --
--- No se eliminan roles existentes para evitar errores por dependencias de privilegios.
 
 -- ------------------------------------------------------------
 -- 1. Crear usuarios de conexión si no existen
@@ -85,7 +84,7 @@ GRANT INSERT ON TABLE
 TO obligatorio_unlogged;
 
 -- ------------------------------------------------------------
--- 4. Rol app fallback: autenticado sin rol funcional
+-- 4. Rol app fallback: es decir conexión base del programa
 -- ------------------------------------------------------------
 GRANT SELECT ON TABLE
     usuario,
@@ -125,8 +124,6 @@ TO obligatorio_general, obligatorio_funcionario, obligatorio_admin;
 GRANT UPDATE (contrasena) ON TABLE login
 TO obligatorio_general, obligatorio_funcionario, obligatorio_admin;
 
--- El backend actual reutiliza el mismo UPDATE de usuario para editar perfil.
--- No se concede cambio de email porque es PK y claim de autenticación.
 GRANT UPDATE (
     nombre,
     habilitado,
@@ -155,10 +152,9 @@ TO obligatorio_funcionario;
 GRANT USAGE ON SEQUENCE dispositivo_escaneo_id_dispositivo_escaneo_seq
 TO obligatorio_funcionario;
 
--- Necesario porque fn_validar_escaneo() actualiza entrada.estado y eso dispara
--- trg_recalcular_monto_compra, que recalcula compra.monto_total.
--- Se limita a la columna usada por el trigger en vez de dar UPDATE total.
+
 GRANT UPDATE (monto_total) ON TABLE compra TO obligatorio_funcionario;
+
 -- ------------------------------------------------------------
 -- 6. Usuario General: compras, entradas y transferencias
 -- ------------------------------------------------------------
@@ -210,7 +206,6 @@ TO obligatorio_funcionario;
 
 GRANT INSERT ON TABLE valida TO obligatorio_funcionario;
 
--- El trigger de validación marca la entrada como consumida.
 GRANT UPDATE (estado) ON TABLE entrada TO obligatorio_funcionario;
 
 GRANT USAGE ON SEQUENCE valida_id_validacion_seq TO obligatorio_funcionario;

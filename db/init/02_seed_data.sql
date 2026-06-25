@@ -1,7 +1,5 @@
 -- ============================================================
--- INSERTS DE PRUEBA PARA DOCKER
--- Todas las fechas y horas de partidos están expresadas en horario de Uruguay (UYT, UTC-3).
--- Contraseña de prueba para todos los usuarios: la misma usada en el backend de demo.
+-- INSERTS DE PRUEBA
 -- ============================================================
 
 -- ============================================================
@@ -773,7 +771,6 @@ INSERT INTO entrada (
     (17, '2026-06-25 16:30:20', 'activa', 'SEED:CAM-NOR-FRA-B-001', 280, 11, 61, 'B', 11, 'camila.santos@correo.ucu.edu.uy'),
     (18, '2026-06-24 08:45:20', 'activa', 'SEED:ROD-SEN-IRQ-C-001', 210, 12, 62, 'C', 13, 'rodrigo.gonzalez@correo.ucu.edu.uy');
 
--- Compra cancelada: se mantiene el historial de la compra y la entrada queda cancelada.
 UPDATE entrada
 SET estado = 'cancelada'
 WHERE id_entrada = 18;
@@ -858,7 +855,7 @@ SET estado = 'cancelada', fecha_hora = '2026-06-26 20:20:00'
 WHERE id_transferencia = 5;
 
 -- ------------------------------------------------------------
--- 7.4 QR finales coherentes con EntradaQrCodeService.GeneratePayload
+-- 7.4 QR finales
 -- ------------------------------------------------------------
 UPDATE entrada
 SET codigo_qr =
@@ -903,10 +900,6 @@ ALTER TABLE valida ENABLE TRIGGER trg_validar_escaneo;
 -- ------------------------------------------------------------
 -- 7.Y Entradas vencidas no utilizadas
 -- ------------------------------------------------------------
--- Representan entradas pagas para partidos terminados que nunca fueron consumidas.
--- En BD se conservan como 'activa'.
--- El front las muestra como 'vencida' porque el partido está 'terminado'.
--- No tienen QR precargado y no deben tener validación válida asociada.
 
 INSERT INTO compra (
     id_compra,
@@ -925,12 +918,7 @@ INSERT INTO compra (
         'paga'
     );
 
--- Partido 46: GHA vs ENG, terminado, estadio 11.
--- Costo partido = 65.
--- Sector C estadio 11 = 160 => entrada 225.
--- Sector D estadio 11 = 100 => entrada 165.
--- Subtotal = 390.
--- Comisión 5% => ROUND(390 * 1.05) = 410.
+
 INSERT INTO entrada (
     id_entrada,
     fecha_hora,
@@ -971,9 +959,6 @@ INSERT INTO entrada (
 -- ------------------------------------------------------------
 -- 7.6 Recalcular importes finales de compras
 -- ------------------------------------------------------------
--- Mantiene el seed alineado con fn_recalcular_monto_compra:
--- monto_total = ROUND(SUM(costo_total) + comisión).
--- Se recalcula al final para cubrir cualquier UPDATE de estado realizado durante el seed.
 UPDATE compra c
 SET monto_total = ROUND(
     COALESCE((

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { AnimatePresence, motion } from "framer-motion";
 import { LuPlus, LuX, LuArrowLeft, LuArrowRight } from "react-icons/lu";
@@ -10,7 +10,7 @@ import Select from "../../../components/ui/Select";
 import Button from "../../../components/ui/Button";
 import { useAuth } from "../hooks/useAuth";
 import { routePaths } from "../../../routes/routePaths";
-import { TIPOS_DOCUMENTO } from "../../../lib/constants";
+import { TIPOS_DOCUMENTO, ROLES } from "../../../lib/constants";
 import { esEmailUcu, esEnteroPositivo, esRequerido, minLargo } from "../../../lib/validators";
 import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
 
@@ -24,7 +24,7 @@ const PASOS = [
  */
 export default function RegisterPage() {
   useDocumentTitle("Crear cuenta");
-  const { register } = useAuth();
+  const { register, isAuthenticated, roles = [] } = useAuth();
   const navigate = useNavigate();
 
   const [paso, setPaso] = useState(1);
@@ -45,6 +45,12 @@ export default function RegisterPage() {
     codigoPostalDireccion: "",
     telefonos: [],
   });
+
+  const destinoPorRol = (rolesActuales) => {
+  if (rolesActuales.includes(ROLES.ADMIN)) return routePaths.admin;
+  if (rolesActuales.includes(ROLES.FUNCIONARIO)) return routePaths.scanner;
+  return routePaths.home;
+  };
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -106,6 +112,10 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  if (isAuthenticated) {
+    return <Navigate to={destinoPorRol(roles)} replace />;
+  }
 
   return (
     <AuthShell

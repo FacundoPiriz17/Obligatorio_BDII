@@ -1,4 +1,4 @@
--- Descomentar para Crear la BD, luego tocar arriba a la derecha el schema del obligatorio
+-- Descomentar para Crear la BD, luego tocar arriba a la derecha el schema del obligatorio en datagrip (OBSOLETO)
 -- DROP DATABASE IF EXISTS obligatoriobd2;
 -- CREATE DATABASE obligatoriobd2;
 
@@ -191,7 +191,7 @@ CREATE TABLE partido (
                          fase fase_enum NOT NULL,
                          estado estado_partido_enum NOT NULL DEFAULT 'no empezado',
                          email_admin VARCHAR(100) NOT NULL ,
-                         fecha_habilitacion DATE DEFAULT CURRENT_DATE,
+                         fecha_habilitacion DATE NOT NULL DEFAULT CURRENT_DATE,
 
                          CHECK (costo >= 0),
                          CHECK (equipo_visitante <> equipo_local),
@@ -392,7 +392,6 @@ CREATE TRIGGER trg_validar_admin_pais_partido
 EXECUTE FUNCTION fn_validar_admin_pais_partido();
 
 -- 1.B. Controlar transiciones de estado y que un partido no empezado no quede en el pasado.
---      Se aplica solo sobre UPDATE para no interferir con datos demo cargados por seed.
 
 CREATE OR REPLACE FUNCTION fn_validar_actualizacion_estado_partido()
     RETURNS TRIGGER AS $$
@@ -622,8 +621,7 @@ CREATE TRIGGER trg_preparar_entrada
 EXECUTE FUNCTION fn_preparar_entrada();
 
 
--- 2.B Validar que la capacidad de un sector no baje por debajo
---     de las entradas no canceladas ya emitidas para algún partido.
+-- 2.B Validar que la capacidad de un sector no baje por debajo de las entradas no canceladas ya emitidas para algún partido.
 
 CREATE OR REPLACE FUNCTION fn_validar_capacidad_sector_con_entradas()
     RETURNS TRIGGER AS $$
@@ -899,5 +897,3 @@ CREATE TRIGGER trg_validar_escaneo
     BEFORE INSERT ON valida
     FOR EACH ROW
 EXECUTE FUNCTION fn_validar_escaneo();
-
--- ============================================================

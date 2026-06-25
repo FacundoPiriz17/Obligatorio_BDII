@@ -33,6 +33,5 @@ export const routePaths = {
   adminEstadioEditar: (id = ":idEstadio") => `/admin/estadios/${id}/editar`,
   adminUsuarios: "/admin/usuarios",
   adminDispositivos: "/admin/dispositivos",
-  adminValidaciones: "/admin/validaciones",
   adminAuditoria: "/admin/auditoria",
 };
