@@ -125,11 +125,27 @@ public sealed partial class ValidacionService : IValidacionService
         if (request.NumeroDocumento <= 0)
             throw new InvalidOperationException("El numero de documento debe ser mayor a 0.");
 
-        return await _validacionRepository.VerificarEntradaManualAsync(
-                   request.IdEntrada,
-                   request.NumeroDocumento,
-                   cancellationToken)
-               ?? throw new KeyNotFoundException("Entrada no encontrada.");
+        var resultado = await _validacionRepository.VerificarEntradaManualAsync(
+                            request.IdEntrada,
+                            request.NumeroDocumento,
+                            cancellationToken)
+                        ?? throw new KeyNotFoundException("Entrada no encontrada.");
+        
+        var entrada = resultado.Entrada;
+
+        if (!string.Equals(entrada.Estado, "activa", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"La entrada no está activa (estado actual: {entrada.Estado}).");
+
+        if (string.Equals(entrada.Partido.Estado, "terminado", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("El partido ya terminó.");
+
+        var fechaHoraPartido = entrada.Partido.Fecha.ToDateTime(entrada.Partido.Hora);
+        if (fechaHoraPartido < DateTime.UtcNow)
+            throw new InvalidOperationException(
+                "No se puede verificar una entrada para un partido que ya ocurrió.");
+
+        return resultado;
     }
 
     private static int? TryExtraerIdEntrada(string codigoEscaneado)
