@@ -90,9 +90,9 @@ export default function LoginPage() {
         ? `${fromLocation.pathname}${fromLocation.search ?? ""}${fromLocation.hash ?? ""}`
         : null;
 
-      const destino = puedeAcceder(from, rolesLogin)
+      const destino = puedeAcceder(from, roles)
         ? from
-        : destinoPorRol(rolesLogin);
+        : destinoPorRol(roles);
 
       navigate(destino, { replace: true });
     } catch (err) {
