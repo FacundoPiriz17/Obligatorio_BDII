@@ -55,8 +55,8 @@ const crearSectoresEquitativos = (capacidad, actuales = []) => {
   });
 };
 
-const esEnteroNoNegativoOpcional = (v) =>
-  v === "" || (Number.isInteger(Number(v)) && Number(v) >= 0);
+const esEnteroNoNegativo = (v) =>
+  v !== "" && Number.isInteger(Number(v)) && Number(v) >= 0;
 
 const urlValidaOpcional = (v) => {
   const valor = String(v ?? "").trim();
@@ -153,8 +153,8 @@ export default function EstadioFormPage() {
         break;
       }
 
-      if (!esEnteroNoNegativoOpcional(s.costo)) {
-        e.sectores = `El costo del sector ${s.nombreSector} debe ser un entero mayor o igual a 0, o quedar vacío.`;
+      if (!esEnteroNoNegativo(s.costo)) {
+        e.sectores = `El costo del sector ${s.nombreSector} es obligatorio y debe ser un entero mayor o igual a 0.`;
         break;
       }
     }
@@ -181,7 +181,7 @@ export default function EstadioFormPage() {
     form.sectores.map((s) => ({
       nombreSector: s.nombreSector,
       capacidad: Number(s.capacidad),
-      costo: s.costo === "" ? null : Number(s.costo),
+      costo: Number(s.costo),
     }));
 
   const onSubmit = async (ev) => {

@@ -142,6 +142,10 @@ public sealed class EventoService : IEventoService
             var nuevaFechaHoraPartido = request.Fecha.ToDateTime(request.Hora);
             if (nuevaFechaHoraPartido < DateTime.Now)
                 throw new InvalidOperationException("No se puede mover un partido no empezado a una fecha y hora anterior a la actual.");
+
+            if (actual.MarcadorLocal != request.MarcadorLocal ||
+                actual.MarcadorVisitante != request.MarcadorVisitante)
+                throw new InvalidOperationException("El marcador solo se puede modificar cuando el partido está empezado.");
         }
 
         if (actual.Estado == "empezado")

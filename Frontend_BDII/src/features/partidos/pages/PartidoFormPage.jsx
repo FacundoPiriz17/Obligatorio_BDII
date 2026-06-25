@@ -72,6 +72,7 @@ export default function PartidoFormPage() {
   const soloMarcador = esEdicion && form.estado === "empezado";
   const terminado = esEdicion && form.estado === "terminado";
   const bloquearCampos = soloMarcador || terminado;
+  const bloquearMarcador = !soloMarcador;
 
   const toggleSector = (nombre) =>
     setForm((f) => ({
@@ -229,10 +230,26 @@ export default function PartidoFormPage() {
                   disabled={esEdicion}
                   hint="El estado se cambia desde las acciones de la lista de eventos."
                 />
-                <Input label={`Goles ${form.equipoLocal || "local"}`} type="number" min="0"
-                  value={form.marcadorLocal} onChange={set("marcadorLocal")} disabled={terminado} />
-                <Input label={`Goles ${form.equipoVisitante || "visitante"}`} type="number" min="0"
-                  value={form.marcadorVisitante} onChange={set("marcadorVisitante")} disabled={terminado} />
+                <Input
+                  label={`Goles ${form.equipoLocal || "local"}`}
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={form.marcadorLocal}
+                  onChange={set("marcadorLocal")}
+                  disabled={bloquearMarcador}
+                />
+                <Input
+                  label={`Goles ${form.equipoVisitante || "visitante"}`}
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={form.marcadorVisitante}
+                  onChange={set("marcadorVisitante")}
+                  disabled={bloquearMarcador}
+                />
               </CardBody>
             </Card>
           )}
