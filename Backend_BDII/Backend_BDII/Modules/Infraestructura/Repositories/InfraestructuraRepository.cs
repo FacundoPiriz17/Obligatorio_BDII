@@ -172,6 +172,31 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
                 return null;
             }
 
+            if (request.Sectores is { Count: > 0 })
+            {
+                foreach (var sectorRequest in request.Sectores)
+                {
+                    var nombreSector = sectorRequest.NombreSector.Trim().ToUpperInvariant();
+
+                    await UpsertSectorAsync(
+                        connection,
+                        transaction,
+                        idEstadio,
+                        nombreSector,
+                        sectorRequest.Capacidad,
+                        sectorRequest.Costo,
+                        cancellationToken);
+
+                    await ValidarCapacidadNoMenorQueEntradasVendidasAsync(
+                        connection,
+                        transaction,
+                        idEstadio,
+                        nombreSector,
+                        sectorRequest.Capacidad,
+                        cancellationToken);
+                }
+            }
+
             await ValidarCapacidadTotalSectoresAsync(connection, transaction, idEstadio, cancellationToken);
 
             var estadio = await GetEstadioByIdUsingConnectionAsync(connection, idEstadio, transaction, cancellationToken);
@@ -424,6 +449,33 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
         return MapDispositivo(reader);
     }
 
+    private static async Task UpsertSectorAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        int idEstadio,
+        string nombreSector,
+        int? capacidad,
+        int? costo,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO sector (nombre_sector, capacidad, id_estadio, costo)
+            VALUES (CAST(@nombre_sector AS sector_enum), @capacidad, @id_estadio, @costo)
+            ON CONFLICT (nombre_sector, id_estadio)
+            DO UPDATE SET
+                capacidad = EXCLUDED.capacidad,
+                costo = EXCLUDED.costo;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id_estadio", idEstadio);
+        command.Parameters.AddWithValue("nombre_sector", nombreSector);
+        command.Parameters.AddWithValue("capacidad", (object?)capacidad ?? DBNull.Value);
+        command.Parameters.AddWithValue("costo", (object?)costo ?? DBNull.Value);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task ValidarPaisAdminAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -515,14 +567,14 @@ public sealed class InfraestructuraRepository : IInfraestructuraRepository
             throw new InvalidOperationException("No se pudo validar la capacidad del estadio.");
 
         if (reader.IsDBNull(reader.GetOrdinal("capacidad_estadio")))
-            return;
+            throw new InvalidOperationException("La capacidad del estadio es obligatoria.");
 
         var capacidadEstadio = reader.GetInt32(reader.GetOrdinal("capacidad_estadio"));
         var capacidadSectores = reader.GetInt32(reader.GetOrdinal("capacidad_sectores"));
 
-        if (capacidadSectores > capacidadEstadio)
+        if (capacidadSectores != capacidadEstadio)
             throw new InvalidOperationException(
-                $"La suma de capacidades de los sectores ({capacidadSectores}) no puede superar la capacidad del estadio ({capacidadEstadio}).");
+                $"La suma de capacidades de los sectores ({capacidadSectores}) debe coincidir con la capacidad del estadio ({capacidadEstadio}).");
     }
 
     private static async Task<string?> GetPaisEstadioAsync(

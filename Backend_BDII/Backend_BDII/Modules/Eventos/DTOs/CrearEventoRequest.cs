@@ -9,6 +9,5 @@ public sealed class CrearEventoRequest
     public required string EquipoLocal { get; init; }
     public int Costo { get; init; }
     public required string Fase { get; init; }
-    public DateOnly? FechaHabilitacion { get; init; }
     public List<string> SectoresHabilitados { get; init; } = [];
 }

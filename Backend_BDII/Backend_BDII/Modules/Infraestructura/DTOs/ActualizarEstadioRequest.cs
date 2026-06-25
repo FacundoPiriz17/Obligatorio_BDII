@@ -7,4 +7,5 @@ public sealed class ActualizarEstadioRequest
     public string? Ubicacion { get; init; }
     public string? Ciudad { get; init; }
     public required string Pais { get; init; }
+    public List<CrearSectorRequest>? Sectores { get; init; }
 }

@@ -36,10 +36,25 @@ public sealed class InfraestructuraService : IInfraestructuraService
         CancellationToken cancellationToken = default)
     {
         ValidarEstadio(request.Nombre, request.Capacidad, request.Pais);
-        ValidarSectoresCreacion(request.Sectores);
-        ValidarCapacidadSectores(request.Capacidad, request.Sectores);
 
-        return _infraestructuraRepository.CrearEstadioAsync(NormalizeEmail(emailAdmin), request, cancellationToken);
+        var sectores = request.Sectores.Count == 0
+            ? CrearSectoresEquitativos(request.Capacidad!.Value)
+            : request.Sectores;
+
+        ValidarSectoresCreacion(sectores);
+        ValidarCapacidadSectores(request.Capacidad, sectores);
+
+        var requestNormalizado = new CrearEstadioRequest
+        {
+            Nombre = request.Nombre,
+            Capacidad = request.Capacidad,
+            Ubicacion = request.Ubicacion,
+            Ciudad = request.Ciudad,
+            Pais = request.Pais,
+            Sectores = sectores
+        };
+
+        return _infraestructuraRepository.CrearEstadioAsync(NormalizeEmail(emailAdmin), requestNormalizado, cancellationToken);
     }
 
     public async Task<EstadioResponse> ActualizarEstadioAsync(
@@ -49,6 +64,12 @@ public sealed class InfraestructuraService : IInfraestructuraService
         CancellationToken cancellationToken = default)
     {
         ValidarEstadio(request.Nombre, request.Capacidad, request.Pais);
+
+        if (request.Sectores is { Count: > 0 })
+        {
+            ValidarSectoresCreacion(request.Sectores);
+            ValidarCapacidadSectores(request.Capacidad, request.Sectores);
+        }
 
         return await _infraestructuraRepository.ActualizarEstadioAsync(
                    idEstadio,
@@ -150,8 +171,8 @@ public sealed class InfraestructuraService : IInfraestructuraService
         if (string.IsNullOrWhiteSpace(nombre) || nombre.Trim().Length < 3)
             throw new InvalidOperationException("El nombre del estadio debe tener al menos 3 caracteres.");
 
-        if (capacidad.HasValue && capacidad.Value <= 0)
-            throw new InvalidOperationException("La capacidad del estadio debe ser mayor a 0.");
+        if (!capacidad.HasValue || capacidad.Value <= 0)
+            throw new InvalidOperationException("La capacidad del estadio es obligatoria y debe ser mayor a 0.");
 
         if (string.IsNullOrWhiteSpace(pais))
             throw new InvalidOperationException("El pais del estadio es obligatorio.");
@@ -159,37 +180,53 @@ public sealed class InfraestructuraService : IInfraestructuraService
 
     private static void ValidarSectoresCreacion(List<CrearSectorRequest>? sectores)
     {
-        if (sectores is null || sectores.Count == 0)
-            throw new InvalidOperationException("Debe crear al menos un sector para el estadio.");
+        if (sectores is null || sectores.Count != 4)
+            throw new InvalidOperationException("El estadio debe tener exactamente los sectores A, B, C y D.");
 
         var nombres = sectores.Select(s => s.NombreSector.Trim().ToUpperInvariant()).ToList();
 
-        if (nombres.Any(s => !SectoresValidos.Contains(s)))
-            throw new InvalidOperationException("Los sectores deben ser A, B, C o D.");
+        if (!SectoresValidos.SetEquals(nombres))
+            throw new InvalidOperationException("El estadio debe tener exactamente los sectores A, B, C y D.");
 
         if (nombres.Count != nombres.Distinct().Count())
             throw new InvalidOperationException("No se pueden repetir sectores.");
 
         foreach (var sector in sectores)
         {
-            if (sector.Capacidad.HasValue && sector.Capacidad.Value <= 0)
-                throw new InvalidOperationException("La capacidad del sector debe ser mayor a 0.");
+            if (!sector.Capacidad.HasValue || sector.Capacidad.Value <= 0)
+                throw new InvalidOperationException($"La capacidad del sector {sector.NombreSector} es obligatoria y debe ser mayor a 0.");
 
             if (sector.Costo.HasValue && sector.Costo.Value < 0)
-                throw new InvalidOperationException("El costo del sector no puede ser negativo.");
+                throw new InvalidOperationException($"El costo del sector {sector.NombreSector} no puede ser negativo.");
         }
     }
 
     private static void ValidarCapacidadSectores(int? capacidadEstadio, IEnumerable<CrearSectorRequest> sectores)
     {
         if (!capacidadEstadio.HasValue)
-            return;
+            throw new InvalidOperationException("La capacidad del estadio es obligatoria.");
 
         var sumaSectores = sectores.Sum(s => s.Capacidad ?? 0);
 
-        if (sumaSectores > capacidadEstadio.Value)
+        if (sumaSectores != capacidadEstadio.Value)
             throw new InvalidOperationException(
-                $"La suma de capacidades de los sectores ({sumaSectores}) no puede superar la capacidad del estadio ({capacidadEstadio.Value}).");
+                $"La suma de capacidades de los sectores ({sumaSectores}) debe coincidir con la capacidad del estadio ({capacidadEstadio.Value}).");
+    }
+
+    private static List<CrearSectorRequest> CrearSectoresEquitativos(int capacidadEstadio)
+    {
+        var baseSector = capacidadEstadio / 4;
+        var resto = capacidadEstadio % 4;
+
+        return SectoresValidos
+            .OrderBy(s => s)
+            .Select((nombre, index) => new CrearSectorRequest
+            {
+                NombreSector = nombre,
+                Capacidad = baseSector + (index < resto ? 1 : 0),
+                Costo = null
+            })
+            .ToList();
     }
 
     private static void ValidarEmailFuncionario(string email)

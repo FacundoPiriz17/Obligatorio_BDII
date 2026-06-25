@@ -12,6 +12,5 @@ public sealed class ActualizarEventoRequest
     public required int Costo { get; init; }
     public required string Fase { get; init; }
     public required string Estado { get; init; }
-    public required DateOnly FechaHabilitacion { get; init; }
     public List<string> SectoresHabilitados { get; init; } = [];
 }

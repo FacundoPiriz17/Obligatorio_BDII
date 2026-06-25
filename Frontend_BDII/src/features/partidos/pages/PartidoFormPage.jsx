@@ -20,9 +20,9 @@ import { useDocumentTitle } from "../../../hooks/useDocumentTitle";
 import { useAuth } from "../../auth/hooks/useAuth";
 
 /**
- * Alta / edición de evento (admin). Reglas del modelo reflejadas en el form:
- * - fecha_habilitacion <= fecha - 1 día 
- * - local != visitante
+ * Alta / edición de evento (admin).
+ * La fecha_habilitacion del partido no se carga desde el form:
+ * la define PostgreSQL con DEFAULT CURRENT_DATE al crear el partido.
  */
 export default function PartidoFormPage() {
   const { idPartido } = useParams();
@@ -40,7 +40,7 @@ export default function PartidoFormPage() {
 
   const [form, setForm] = useState({
     equipoLocal: "", equipoVisitante: "", idEstadio: "", fecha: "", hora: "",
-    costo: "", fase: FASES[0], fechaHabilitacion: "", sectoresHabilitados: [],
+    costo: "", fase: FASES[0], sectoresHabilitados: [],
     estado: "no empezado", marcadorLocal: 0, marcadorVisitante: 0,
   });
   const [errores, setErrores] = useState({});
@@ -56,7 +56,6 @@ export default function PartidoFormPage() {
       hora: String(original.hora ?? "").slice(0, 5),
       costo: String(original.costoBase ?? 0),
       fase: original.fase ?? FASES[0],
-      fechaHabilitacion: toInputDate(original.fechaHabilitacion),
       sectoresHabilitados: (original.sectores ?? []).map((s) => s.nombreSector),
       estado: original.estado ?? "no empezado",
       marcadorLocal: original.marcadorLocal ?? 0,
@@ -100,13 +99,6 @@ export default function PartidoFormPage() {
       }
     }
     if (form.costo === "" || Number(form.costo) < 0) e.costo = "Costo base inválido.";
-    if (!form.fechaHabilitacion) e.fechaHabilitacion = "Indicá la fecha de habilitación.";
-    if (form.fechaHabilitacion && form.fecha) {
-      const hab = new Date(form.fechaHabilitacion);
-      const fec = new Date(form.fecha);
-      if ((fec - hab) / 86400000 < 1)
-        e.fechaHabilitacion = "Debe ser al menos un día antes del partido.";
-    }
     if (form.sectoresHabilitados.length === 0)
       e.sectores = "Habilitá al menos un sector a la venta.";
     setErrores(e);
@@ -125,7 +117,6 @@ export default function PartidoFormPage() {
       equipoVisitante: form.equipoVisitante,
       costo: Number(form.costo),
       fase: form.fase,
-      fechaHabilitacion: form.fechaHabilitacion,
       sectoresHabilitados: form.sectoresHabilitados,
     };
     try {
@@ -223,9 +214,6 @@ export default function PartidoFormPage() {
                 />
               <Input label="Fecha del partido" type="date" value={form.fecha} onChange={set("fecha")} error={errores.fecha} disabled={bloquearCampos} />
               <Input label="Hora" type="time" value={form.hora} onChange={set("hora")} error={errores.hora} disabled={bloquearCampos} />
-              <Input className="sm:col-span-2" label="Fecha de habilitación de venta" type="date"
-                value={form.fechaHabilitacion} onChange={set("fechaHabilitacion")} error={errores.fechaHabilitacion} disabled={bloquearCampos}
-                hint="La venta abre en esta fecha y debe cerrar al menos 1 día antes del partido." />
             </CardBody>
           </Card>
 

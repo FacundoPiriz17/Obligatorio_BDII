@@ -199,8 +199,7 @@ public sealed class EventoRepository : IEventoRepository
                     equipo_local,
                     costo,
                     fase,
-                    email_admin,
-                    fecha_habilitacion
+                    email_admin
                 )
                 VALUES (
                     @fecha,
@@ -210,8 +209,7 @@ public sealed class EventoRepository : IEventoRepository
                     @equipo_local,
                     @costo,
                     CAST(@fase AS fase_enum),
-                    @email_admin,
-                    @fecha_habilitacion
+                    @email_admin
                 )
                 RETURNING id_partido;
                 """;
@@ -228,9 +226,6 @@ public sealed class EventoRepository : IEventoRepository
                 command.Parameters.AddWithValue("costo", request.Costo);
                 command.Parameters.AddWithValue("fase", request.Fase.Trim());
                 command.Parameters.AddWithValue("email_admin", emailAdmin);
-                command.Parameters.AddWithValue(
-                    "fecha_habilitacion",
-                    request.FechaHabilitacion ?? DateOnly.FromDateTime(DateTime.Today));
 
                 idPartido = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
             }
@@ -291,8 +286,7 @@ public sealed class EventoRepository : IEventoRepository
                                          marcador_local = @marcador_local,
                                          marcador_visitante = @marcador_visitante,
                                          estado = CAST(@estado AS estado_partido_enum),
-                                         email_admin = @email_admin,
-                                         fecha_habilitacion = @fecha_habilitacion
+                                         email_admin = @email_admin
                                      FROM admin a, estadio est_actual
                                      WHERE p.id_partido = @id_partido
                                        AND est_actual.id_estadio = p.id_estadio
@@ -316,7 +310,6 @@ public sealed class EventoRepository : IEventoRepository
                 command.Parameters.AddWithValue("fase", request.Fase.Trim());
                 command.Parameters.AddWithValue("estado", request.Estado.Trim().ToLowerInvariant());
                 command.Parameters.AddWithValue("email_admin", emailAdmin);
-                command.Parameters.AddWithValue("fecha_habilitacion", request.FechaHabilitacion);
 
                 affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             }
